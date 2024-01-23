@@ -57,6 +57,7 @@ const ICONS = {
   edit: `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/></svg>`,
   delete: `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M6.854 7.146a.5.5 0 1 0-.708.708L7.293 9l-1.147 1.146a.5.5 0 0 0 .708.708L8 9.707l1.146 1.147a.5.5 0 0 0 .708-.708L8.707 9l1.147-1.146a.5.5 0 0 0-.708-.708L8 8.293 6.854 7.146z"/><path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2zM9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5v2z"/></svg>`,
   view: `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 1h8a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1"/></svg>`,
+  copy: `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M 6 4 H 2 V 3 h 4 v 1 z M 2 7 h 7 V 6 H 2 v 1 z m 0 2 h 7 V 8 H 2 v 1 z m 0 2 h 7 v -1 H 2 v 1 z m 9 -7 v 8 C 11 12 11 13 10 13 H 1 c -0.6 0 -1 -0.5 -1 -1 V 2 c 0 -0.6 0.5 -1 1 -1 h 9 C 11 1 11 2 11 2 z M 10 4 L 10 2 H 1 v 10 h 9 V 4 m 3 0 L 13 14 C 13 14 13 15 12 15 L 3 15 C 3 15 2 15 2 14 L 2 13 L 3 13 L 3 14 L 12 14 L 12 4 L 11 4 L 11 3 L 12 3 C 12 3 13 3 13 4" /></svg>`,
 }
 
 /**
@@ -248,7 +249,7 @@ class Uploader {
   }
 
   fail(reason = "") {
-    this.$uploadStatus.innerHTML = `<span style="width: 20px;" title="${reason}">✗</span><span class="retry-btn" id="retry${this.idx}" title="Retry">↻</span>`;
+    this.$uploadStatus.innerHTML = `<span style="width: 20px;" title="${reason}">✗</span><span class="retry-btn" id="retry${this.idx}" title="重试">↻</span>`;
     failUploaders.set(this.idx, this);
     Uploader.runnings--;
     Uploader.runQueue();
@@ -306,9 +307,9 @@ function addBreadcrumb(href, uri_prefix) {
       }
       path += encodeURIComponent(name);
     }
-    const encodedName = encodedStr(name);
+    const encodedName = encodedStr(i === 1 ? "root" : name);
     if (i === 0) {
-      $breadcrumb.insertAdjacentHTML("beforeend", `<a href="${path}" title="Root"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M6.5 14.5v-3.505c0-.245.25-.495.5-.495h2c.25 0 .5.25.5.5v3.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5z"/></svg></a>`);
+      // $breadcrumb.insertAdjacentHTML("beforeend", `<a href="${path}" title="Root"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M6.5 14.5v-3.505c0-.245.25-.495.5-.495h2c.25 0 .5.25.5.5v3.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5z"/></svg></a>`);
     } else if (i === len - 1) {
       $breadcrumb.insertAdjacentHTML("beforeend", `<b>${encodedName}</b>`);
     } else {
@@ -324,7 +325,7 @@ function setupIndexPage() {
   if (DATA.allow_archive) {
     const $download = document.querySelector(".download");
     $download.href = baseUrl() + "?zip";
-    $download.title = "Download folder as a .zip file";
+    $download.title = "打包并下载";
     $download.classList.remove("hidden");
   }
 
@@ -355,17 +356,17 @@ function renderPathsTableHead() {
     {
       name: "name",
       props: `colspan="2"`,
-      text: "Name",
+      text: "名称",
     },
     {
       name: "mtime",
       props: ``,
-      text: "Last Modified",
+      text: "最后修改于",
     },
     {
       name: "size",
       props: ``,
-      text: "Size",
+      text: "大小",
     }
   ];
   $pathsTableHead.insertAdjacentHTML("beforeend", `
@@ -385,7 +386,7 @@ function renderPathsTableHead() {
     const icon = `<span>${svg}</span>`
     return `<th class="cell-${item.name}" ${item.props}><a href="?${qs}">${item.text}${icon}</a></th>`
   }).join("\n")}
-      <th class="cell-actions">Actions</th>
+      <th class="cell-actions">操作</th>
     </tr>
   `);
 }
@@ -421,33 +422,34 @@ function addPath(file, index) {
   let actionMove = "";
   let actionEdit = "";
   let actionView = "";
+  let actionCopyPath = `<div onclick="copyPath(${index})" class="action-btn" title="复制路径" target="_blank">${ICONS.copy}</div>`
   let isDir = file.path_type.endsWith("Dir");
   if (isDir) {
     url += "/";
     if (DATA.allow_archive) {
       actionDownload = `
       <div class="action-btn">
-        <a href="${url}?zip" title="Download folder as a .zip file">${ICONS.download}</a>
+        <a href="${url}?zip" title="打包并下载">${ICONS.download}</a>
       </div>`;
     }
   } else {
     actionDownload = `
     <div class="action-btn" >
-      <a href="${url}" title="Download file" download>${ICONS.download}</a>
+      <a href="${url}" title="下载" download>${ICONS.download}</a>
     </div>`;
   }
   if (DATA.allow_delete) {
     if (DATA.allow_upload) {
-      actionMove = `<div onclick="movePath(${index})" class="action-btn" id="moveBtn${index}" title="Move to new path">${ICONS.move}</div>`;
+      actionMove = `<div onclick="movePath(${index})" class="action-btn" id="moveBtn${index}" title="移动或重命名">${ICONS.move}</div>`;
       if (!isDir) {
-        actionEdit = `<a class="action-btn" title="Edit file" target="_blank" href="${url}?edit">${ICONS.edit}</a>`;
+        actionEdit = `<a class="action-btn" title="编辑" target="_blank" href="${url}?edit">${ICONS.edit}</a>`;
       }
     }
     actionDelete = `
-    <div onclick="deletePath(${index})" class="action-btn" id="deleteBtn${index}" title="Delete">${ICONS.delete}</div>`;
+    <div onclick="deletePath(${index})" class="action-btn" id="deleteBtn${index}" title="删除">${ICONS.delete}</div>`;
   }
   if (!actionEdit && !isDir) {
-    actionView = `<a class="action-btn" title="View file" target="_blank" href="${url}?view">${ICONS.view}</a>`;
+    actionView = `<a class="action-btn" title="查看" target="_blank" href="${url}?view">${ICONS.view}</a>`;
   }
   let actionCell = `
   <td class="cell-actions">
@@ -456,6 +458,7 @@ function addPath(file, index) {
     ${actionMove}
     ${actionDelete}
     ${actionEdit}
+    ${actionCopyPath}
   </td>`
 
   $pathsTableBody.insertAdjacentHTML("beforeend", `
@@ -546,7 +549,7 @@ function setupNewFolder() {
   const $newFolder = document.querySelector(".new-folder");
   $newFolder.classList.remove("hidden");
   $newFolder.addEventListener("click", () => {
-    const name = prompt("Enter folder name");
+    const name = prompt("文件夹名称");
     if (name) createFolder(name);
   });
 }
@@ -555,7 +558,7 @@ function setupNewFile() {
   const $newFile = document.querySelector(".new-file");
   $newFile.classList.remove("hidden");
   $newFile.addEventListener("click", () => {
-    const name = prompt("Enter file name");
+    const name = prompt("文件名称");
     if (name) createFile(name);
   });
 }
@@ -603,7 +606,7 @@ async function setupEditorPage() {
       $notEditable.insertAdjacentHTML("afterend", `<iframe src="${url}" sandbox width="100%" height="${window.innerHeight - 100}px"></iframe>`)
     } else {
       $notEditable.classList.remove("hidden");
-      $notEditable.textContent = "Cannot edit because file is too large or binary.";
+      $notEditable.textContent = "无法编辑大文件或二进制文件";
     }
     return;
   }
@@ -622,7 +625,7 @@ async function setupEditorPage() {
       $editor.value = decoder.decode(dataView);
     }
   } catch (err) {
-    alert(`Failed get file, ${err.message}`);
+    alert(`获取文件失败, ${err.message}`);
   }
 }
 
@@ -646,7 +649,7 @@ async function deletePath(index) {
 }
 
 async function doDeletePath(name, url, cb) {
-  if (!confirm(`Delete \`${name}\`?`)) return;
+  if (!confirm(`删除 \`${name}\`?`)) return;
   try {
     await checkAuth();
     const res = await fetch(url, {
@@ -655,7 +658,7 @@ async function doDeletePath(name, url, cb) {
     await assertResOK(res);
     cb();
   } catch (err) {
-    alert(`Cannot delete \`${file.name}\`, ${err.message}`);
+    alert(`无法删除 \`${file.name}\`, ${err.message}`);
   }
 }
 
@@ -674,18 +677,37 @@ async function movePath(index) {
   }
 }
 
-async function doMovePath(fileUrl) {
+function copyPath(index) {
+  const file = DATA.paths[index];
+  if (!file) return;
+  const [filePath] = urlToRootPath(newUrl(file.name))
+  navigator.clipboard.writeText(filePath).then(() => {
+    alert("已复制路径到剪贴板");
+  })
+}
+
+function urlToRootPath(fileUrl) {
   const fileUrlObj = new URL(fileUrl)
-
   const prefix = DATA.uri_prefix.slice(0, -1);
+  const pathSegments = fileUrlObj.pathname.slice(prefix.length).split('/');
+  const firstSegment = pathSegments[1];
+  pathSegments[1] = ROOT;
+  const filePath = decodeURIComponent(pathSegments.join('/'));
+  return [filePath, firstSegment]
+}
 
-  const filePath = decodeURIComponent(fileUrlObj.pathname.slice(prefix.length));
-
-  let newPath = prompt("Enter new path", filePath)
+const ROOT = "root";
+async function doMovePath(fileUrl) {
+  const [filePath, firstSegment] = urlToRootPath(fileUrl)
+  let newPath = prompt("新路径", filePath)
   if (!newPath) return;
-  if (!newPath.startsWith("/")) newPath = "/" + newPath;
   if (filePath === newPath) return;
-  const newFileUrl = fileUrlObj.origin + prefix + newPath.split("/").map(encodeURIComponent).join("/");
+  if (!newPath.startsWith(`/${ROOT}`)) {
+    alert(`不能将文件移出 /root 文件夹`);
+    return;
+  }
+
+  const newFileUrl = fileUrlObj.origin + prefix + newPath.split("/").map((segment, i) => i === 1 ? firstSegment : segment).map(encodeURIComponent).join("/");
 
   try {
     await checkAuth();
@@ -693,7 +715,7 @@ async function doMovePath(fileUrl) {
       method: "HEAD",
     });
     if (res1.status === 200) {
-      if (!confirm("Override existing file?")) {
+      if (!confirm("是否覆盖？")) {
         return;
       }
     }
@@ -706,7 +728,7 @@ async function doMovePath(fileUrl) {
     await assertResOK(res2);
     return newFileUrl;
   } catch (err) {
-    alert(`Cannot move \`${filePath}\` to \`${newPath}\`, ${err.message}`);
+    alert(`无法移动 \`${filePath}\` 到 \`${newPath}\`, ${err.message}`);
   }
 }
 
@@ -722,7 +744,7 @@ async function saveChange() {
     });
     location.reload();
   } catch (err) {
-    alert(`Failed to save file, ${err.message}`);
+    alert(`保存失败, ${err.message}`);
   }
 }
 
@@ -751,7 +773,7 @@ async function createFolder(name) {
     await assertResOK(res);
     location.href = url;
   } catch (err) {
-    alert(`Cannot create folder \`${name}\`, ${err.message}`);
+    alert(`无法创建文件夹 \`${name}\`, ${err.message}`);
   }
 }
 
@@ -766,7 +788,7 @@ async function createFile(name) {
     await assertResOK(res);
     location.href = url + "?edit";
   } catch (err) {
-    alert(`Cannot create file \`${name}\`, ${err.message}`);
+    alert(`无法创建文件 \`${name}\`, ${err.message}`);
   }
 }
 

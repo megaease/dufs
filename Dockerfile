@@ -1,19 +1,14 @@
-FROM alpine as builder
-ARG REPO VER TARGETPLATFORM
-RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \ 
-        TARGET="x86_64-unknown-linux-musl"; \
-    elif [  "$TARGETPLATFORM" = "linux/arm64" ]; then \
-        TARGET="aarch64-unknown-linux-musl"; \
-    elif [  "$TARGETPLATFORM" = "linux/386" ]; then \
-        TARGET="i686-unknown-linux-musl"; \
-    elif [  "$TARGETPLATFORM" = "linux/arm/v7" ]; then \
-        TARGET="armv7-unknown-linux-musleabihf"; \
-    fi && \
-    wget https://github.com/${REPO}/releases/download/${VER}/dufs-${VER}-${TARGET}.tar.gz && \
-    tar -xf dufs-${VER}-${TARGET}.tar.gz && \
-    mv dufs /bin/
+FROM rust:1.72.1 as builder
+
+COPY assets /dufs/assets
+COPY src /dufs/src
+COPY Cargo.toml /dufs/Cargo.toml
+
+WORKDIR /dufs
+RUN apt update && apt install musl-tools -y
+RUN rustup target add x86_64-unknown-linux-musl && cargo build --release --target=x86_64-unknown-linux-musl
 
 FROM scratch
-COPY --from=builder /bin/dufs /bin/dufs
+COPY --from=builder /dufs/target/x86_64-unknown-linux-musl/release/dufs /bin/dufs
 STOPSIGNAL SIGINT
 ENTRYPOINT ["/bin/dufs"]

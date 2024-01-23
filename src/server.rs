@@ -1257,9 +1257,9 @@ impl Server {
 
     async fn to_pathitem<P: AsRef<Path>>(&self, path: P, base_path: P) -> Result<Option<PathItem>> {
         let path = path.as_ref();
-        let (meta, meta2) = tokio::join!(fs::metadata(&path), fs::symlink_metadata(&path));
-        let (meta, meta2) = (meta?, meta2?);
-        let is_symlink = meta2.is_symlink();
+        let (meta,) = tokio::join!(fs::symlink_metadata(&path));
+        let (meta,) = (meta?, );
+        let is_symlink = meta.is_symlink();
         if !self.args.allow_symlink && is_symlink && !self.is_root_contained(path).await {
             return Ok(None);
         }
