@@ -707,6 +707,8 @@ async function doMovePath(fileUrl) {
     return;
   }
 
+  const prefix = DATA.uri_prefix.slice(0, -1);
+  const fileUrlObj = new URL(fileUrl)
   const newFileUrl = fileUrlObj.origin + prefix + newPath.split("/").map((segment, i) => i === 1 ? firstSegment : segment).map(encodeURIComponent).join("/");
 
   try {
