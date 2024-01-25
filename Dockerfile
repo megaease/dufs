@@ -7,7 +7,8 @@ COPY assets /dufs/assets
 COPY src /dufs/src
 COPY Cargo.toml /dufs/Cargo.toml
 
-RUN rustup target add x86_64-unknown-linux-musl && cargo build --release --target=x86_64-unknown-linux-musl
+RUN rustup target add x86_64-unknown-linux-musl
+RUN cargo build --release --target=x86_64-unknown-linux-musl
 
 FROM scratch
 COPY --from=builder /dufs/target/x86_64-unknown-linux-musl/release/dufs /bin/dufs
