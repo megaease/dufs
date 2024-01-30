@@ -322,6 +322,10 @@ function addBreadcrumb(href, uri_prefix) {
 }
 
 function setupIndexPage() {
+  const $hints = document.querySelector("#operationHints")
+  $hints.textContent = "单击选中，双击打开，shift + 单击多选，ESC 取消，右键菜单";
+  $hints.classList.remove("hidden");
+
   if (DATA.allow_archive) {
     const $download = document.querySelector(".download");
     $download.href = baseUrl() + "?zip";
