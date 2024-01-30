@@ -349,6 +349,13 @@ function setupIndexPage() {
     setupSearch()
   }
 
+  // setupDeleteButton();
+  const deleteBtn = document.getElementById('delete-btn');
+  const removeButton = document.createElement('button');
+  removeButton.textContent = '批量删除';
+  removeButton.addEventListener('click', deleteSelectedItems);
+  deleteBtn.appendChild(removeButton);
+
   renderPathsTableHead();
   renderPathsTableBody();
 
@@ -382,18 +389,7 @@ function toggleCheckBox() {
     selectAllCheckbox.checked = false;
   }
 
-  if (isAnyChecked) {
-    if (!$deleteButton.querySelector('button')) {
-      const removeButton = document.createElement('button');
-      removeButton.textContent = '批量删除';
-      removeButton.addEventListener('click', deleteSelectedItems);
-      $deleteButton.appendChild(removeButton);
-    }
-  } else {
-    const removeButton = $deleteButton.querySelector('button');
-    if (removeButton) {
-      $deleteButton.removeChild(removeButton);
-    }
+  if (!isAnyChecked) {
     selectAllCheckbox.checked = false;
   }
 }
@@ -448,11 +444,11 @@ function monitorKeys() {
 }
 
 function updateDeleteButtonVisibility() {
-  $deleteButton = document.getElementById('delete-btn');
+  const deleteButton = document.getElementById('delete-btn');
   if (selectedItems.length > 0) {
-    $deleteButton.classList.remove('hidden');
+    deleteButton.classList.remove('disabled');
   } else {
-    $deleteButton.classList.add('hidden');
+    deleteButton.classList.add('disabled');
   }
 }
 
@@ -576,7 +572,7 @@ function addPath(file, index) {
   <td class="path cell-icon" onclick="changeCheckBox(event, ${index})">
     ${getPathSvg(file.path_type)}
   </td>
-  <td class="path cell-name nonselect" onclick="changeCheckBox(event, ${index})" ondblclick="openURL(event, '${url}', ${isDir})">
+  <td class="path cell-name nonselect" onclick="changeCheckBox(event, ${index})" ondblclick="openURL(event, '${index}', '${url}', ${isDir})">
     <a >${encodedName}</a>
   </td>
   <td class="cell-mtime nonselect" onclick="changeCheckBox(event, ${index})">${formatMtime(file.mtime)}</td>
@@ -585,13 +581,20 @@ function addPath(file, index) {
 </tr>`)
 }
 
+// key is index, value is timer
+const checkBoxTimer = {};
 
 /**
  * 
  * @param {click event} event 
  * @param {index, url, idDir} openURLObj 
  */
-function openURL(event, url, isDir) {
+function openURL(event, index, url, isDir) {
+  const timer = checkBoxTimer[index]
+  if (timer) {
+    clearTimeout(timer);
+    delete checkBoxTimer[index];
+  }
   if (isDir) {
     window.location.href = url;
   } else {
@@ -605,20 +608,27 @@ function openURL(event, url, isDir) {
  * @param {number, the index of path} index 
  */
 function changeCheckBox(event, index) {
-  const checkbox = document.querySelector(`input[name="select[]"][value="${index}"]`);
-  const value = checkbox.checked;
-
-  if (!!!event.shiftKey) {
-    const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
-    selectAllCheckbox.checked = false;
-    const checkboxes = document.querySelectorAll('input[name="select[]"]');
-    checkboxes.forEach(checkbox => {
-      checkbox.checked = false;
-    });
+  const timer = checkBoxTimer[index]
+  if (timer) {
+    clearTimeout(timer);
+    delete checkBoxTimer[index];
   }
+  checkBoxTimer[index] = setTimeout(() => {
+    const checkbox = document.querySelector(`input[name="select[]"][value="${index}"]`);
+    const value = checkbox.checked;
 
-  checkbox.checked = !value;
-  toggleCheckBox();
+    if (!!!event.shiftKey) {
+      const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
+      selectAllCheckbox.checked = false;
+      const checkboxes = document.querySelectorAll('input[name="select[]"]');
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+      });
+    }
+
+    checkbox.checked = !value;
+    toggleCheckBox();
+  }, 200);
 }
 
 function setupDropzone() {
