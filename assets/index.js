@@ -131,11 +131,11 @@ function ready() {
 
 
 class Uploader {
-   /**
-   *
-   * @param {File} file
-   * @param {string[]} pathParts
-   */
+  /**
+  *
+  * @param {File} file
+  * @param {string[]} pathParts
+  */
   constructor(file, pathParts) {
     /**
      * @type Element
@@ -360,25 +360,25 @@ function setupIndexPage() {
  * @param {*} checkbox
  */
 function toggleCheckBox() {
-    const checkboxes = document.querySelectorAll('input[name="select[]"]');
-    const isAnyChecked = Array.from(checkboxes).some(checkbox => checkbox.checked);
-    const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
-    updateDeleteButtonVisibility();
+  const checkboxes = document.querySelectorAll('input[name="select[]"]');
+  const isAnyChecked = Array.from(checkboxes).some(checkbox => checkbox.checked);
+  const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
+  updateDeleteButtonVisibility();
 
-    if (isAnyChecked) {
-        if (!$deleteButton.querySelector('button')) {
-            const removeButton = document.createElement('button');
-            removeButton.textContent = '批量删除';
-            removeButton.addEventListener('click', deleteSelectedItems);
-            $deleteButton.appendChild(removeButton);
-        }
-    } else {
-        const removeButton = $deleteButton.querySelector('button');
-        if (removeButton) {
-            $deleteButton.removeChild(removeButton);
-        }
-        selectAllCheckbox.checked = false;
+  if (isAnyChecked) {
+    if (!$deleteButton.querySelector('button')) {
+      const removeButton = document.createElement('button');
+      removeButton.textContent = '批量删除';
+      removeButton.addEventListener('click', deleteSelectedItems);
+      $deleteButton.appendChild(removeButton);
     }
+  } else {
+    const removeButton = $deleteButton.querySelector('button');
+    if (removeButton) {
+      $deleteButton.removeChild(removeButton);
+    }
+    selectAllCheckbox.checked = false;
+  }
 }
 
 /**
@@ -386,16 +386,16 @@ function toggleCheckBox() {
  * @param {*} selectAllCheckbox
  */
 function toggleSelectAll(selectAllCheckbox) {
-    const checkboxes = document.querySelectorAll('input[name="select[]"]');
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = selectAllCheckbox.checked;
-    });
+  const checkboxes = document.querySelectorAll('input[name="select[]"]');
+  checkboxes.forEach(checkbox => {
+    checkbox.checked = selectAllCheckbox.checked;
+  });
 
-    toggleCheckBox();
+  toggleCheckBox();
 }
 
 function deleteSelectedItems() {
-    deleteBatchPaths(selectedItems);
+  deleteBatchPaths(selectedItems);
 }
 
 /**
@@ -404,48 +404,60 @@ function deleteSelectedItems() {
 const selectedItems = [];
 
 function monitorCheckbox() {
-    const checkboxes = document.querySelectorAll('input[name="select[]"]');
-    const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
+  const checkboxes = document.querySelectorAll('input[name="select[]"]');
+  const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
 
-    const updateSelectedItems = (item, isSelected) => {
-        const index = selectedItems.indexOf(item);
-        if (isSelected) {
-            // Not in array return -1
-            if (index === -1) selectedItems.push(item);
-        } else {
-            if (index !== -1) selectedItems.splice(index, 1);
-        }
-        updateDeleteButtonVisibility();
-    };
+  const updateSelectedItems = (item, isSelected) => {
+    const index = selectedItems.indexOf(item);
+    if (isSelected) {
+      // Not in array return -1
+      if (index === -1) selectedItems.push(item);
+    } else {
+      if (index !== -1) selectedItems.splice(index, 1);
+    }
+    updateDeleteButtonVisibility();
+  };
 
-    // Assign event listeners to checkboxes
+  // Assign event listeners to checkboxes
+  checkboxes.forEach((checkbox) => {
+    checkbox.addEventListener('change', (e) => {
+      updateSelectedItems(e.target.value, e.target.checked);
+    });
+  });
+
+  selectAllCheckbox.addEventListener('change', (e) => {
+    const isAllChecked = e.target.checked;
     checkboxes.forEach((checkbox) => {
-        checkbox.addEventListener('change', (e) => {
-            updateSelectedItems(e.target.value, e.target.checked);
-        });
+      checkbox.checked = isAllChecked;
     });
+    // Directly update the selectedItems in bulk
+    selectedItems.splice(0, selectedItems.length);
+    if (isAllChecked) {
+      selectedItems.push(...Array.from(checkboxes).map(checkbox => checkbox.value));
+    }
+    updateDeleteButtonVisibility();
+  });
 
-    selectAllCheckbox.addEventListener('change', (e) => {
-        const isAllChecked = e.target.checked;
-        checkboxes.forEach((checkbox) => {
-            checkbox.checked = isAllChecked;
-        });
-        // Directly update the selectedItems in bulk
-        selectedItems.splice(0, selectedItems.length);
-        if (isAllChecked) {
-            selectedItems.push(...Array.from(checkboxes).map(checkbox => checkbox.value));
-        }
-        updateDeleteButtonVisibility();
-    });
+  // listen to esc key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      selectAllCheckbox.checked = false;
+      checkboxes.forEach((checkbox) => {
+        checkbox.checked = false;
+      });
+      selectedItems.splice(0, selectedItems.length);
+      updateDeleteButtonVisibility();
+    }
+  })
 }
 
 function updateDeleteButtonVisibility() {
-    $deleteButton = document.getElementById('delete-btn');
-    if (selectedItems.length > 0) {
-        $deleteButton.classList.remove('hidden');
-    } else {
-        $deleteButton.classList.add('hidden');
-    }
+  $deleteButton = document.getElementById('delete-btn');
+  if (selectedItems.length > 0) {
+    $deleteButton.classList.remove('hidden');
+  } else {
+    $deleteButton.classList.add('hidden');
+  }
 }
 
 /**
@@ -737,19 +749,19 @@ async function setupEditorPage() {
  * @returns
  */
 async function deletePath(index) {
-    const file = DATA.paths[index];
-    if (!file) return;
-    await doDeletePath(file.name, newUrl(file.name), () => {
-        $deleteButton = document.getElementById("delete-btn");
-        document.getElementById(`addPath${index}`)?.remove();
-        DATA.paths[index] = null;
-        if (!DATA.paths.find(v => !!v)) {
-            $pathsTable.classList.add("hidden");
-            $deleteButton.classList.add("hidden");
-            $emptyFolder.textContent = dirEmptyNote;
-            $emptyFolder.classList.remove("hidden");
-        }
-    })
+  const file = DATA.paths[index];
+  if (!file) return;
+  await doDeletePath(file.name, newUrl(file.name), () => {
+    $deleteButton = document.getElementById("delete-btn");
+    document.getElementById(`addPath${index}`)?.remove();
+    DATA.paths[index] = null;
+    if (!DATA.paths.find(v => !!v)) {
+      $pathsTable.classList.add("hidden");
+      $deleteButton.classList.add("hidden");
+      $emptyFolder.textContent = dirEmptyNote;
+      $emptyFolder.classList.remove("hidden");
+    }
+  })
 }
 
 /**
@@ -758,37 +770,37 @@ async function deletePath(index) {
  * @returns
  */
 async function deleteBatchPaths(selectedItems) {
-    if (selectedItems.length === 0) return;
-    if (!confirm(`是否删除选中的文件 ?`)) return;
-    document.getElementById("delete-btn").classList.add("hidden");
-    for (const index of selectedItems) {
-      const file = DATA.paths[index];
-      if (!file) continue;
-      await doDeletePathWithoutComfirm(newUrl(file.name), () => {
-        $deleteButton = document.getElementById("delete-btn");
-        document.getElementById(`addPath${index}`)?.remove();
-        DATA.paths[index] = null;
-        if (!DATA.paths.find(v => !!v)) {
-          $pathsTable.classList.add("hidden");
-          $deleteButton.classList.add("hidden");
-          $emptyFolder.textContent = dirEmptyNote;
-          $emptyFolder.classList.remove("hidden");
-        }
-      })
+  if (selectedItems.length === 0) return;
+  if (!confirm(`是否删除选中的文件 ?`)) return;
+  document.getElementById("delete-btn").classList.add("hidden");
+  for (const index of selectedItems) {
+    const file = DATA.paths[index];
+    if (!file) continue;
+    await doDeletePathWithoutComfirm(newUrl(file.name), () => {
+      $deleteButton = document.getElementById("delete-btn");
+      document.getElementById(`addPath${index}`)?.remove();
+      DATA.paths[index] = null;
+      if (!DATA.paths.find(v => !!v)) {
+        $pathsTable.classList.add("hidden");
+        $deleteButton.classList.add("hidden");
+        $emptyFolder.textContent = dirEmptyNote;
+        $emptyFolder.classList.remove("hidden");
+      }
+    })
   }
 }
 
 async function doDeletePathWithoutComfirm(url, callback) {
-    try {
-        await checkAuth();
-        const res = await fetch(url, {
-            method: "DELETE",
-        });
-        await assertResOK(res);
-        callback();
-    } catch (err) {
-        alert(`删除文件失败, ${err.message}`);
-    }
+  try {
+    await checkAuth();
+    const res = await fetch(url, {
+      method: "DELETE",
+    });
+    await assertResOK(res);
+    callback();
+  } catch (err) {
+    alert(`删除文件失败, ${err.message}`);
+  }
 }
 
 async function doDeletePath(name, url, cb) {
@@ -1053,12 +1065,12 @@ async function assertResOK(res) {
 }
 
 function getEncoding(contentType) {
-    const charset = contentType?.split(";")[1];
-    if (/charset/i.test(charset)) {
-      let encoding = charset.split("=")[1];
-      if (encoding) {
-        return encoding.toLowerCase()
-      }
+  const charset = contentType?.split(";")[1];
+  if (/charset/i.test(charset)) {
+    let encoding = charset.split("=")[1];
+    if (encoding) {
+      return encoding.toLowerCase()
     }
-    return 'utf-8'
+  }
+  return 'utf-8'
 }
