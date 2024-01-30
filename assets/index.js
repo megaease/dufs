@@ -573,19 +573,41 @@ function addPath(file, index) {
   $pathsTableBody.insertAdjacentHTML("beforeend", `
 <tr id="addPath${index}">
   <td><input type="checkbox" name="select[]" value="${index}" onchange="toggleCheckBox()"></td>
-  <td class="path cell-icon" onclick="clickCheckBox(event, ${index})">
+  <td class="path cell-icon" onclick="changeCheckBox(event, ${index})">
     ${getPathSvg(file.path_type)}
   </td>
-  <td class="path cell-name nonselect" onclick="clickCheckBox(event, ${index})">
-    <a href="${url}" ${isDir ? "" : `target="_blank"`}>${encodedName}</a>
+  <td class="path cell-name nonselect" onclick="changeCheckBox(event, ${index})" ondblclick="openURL(event, '${url}', ${isDir})">
+    <a >${encodedName}</a>
   </td>
-  <td class="cell-mtime nonselect" onclick="clickCheckBox(event, ${index})">${formatMtime(file.mtime)}</td>
-  <td class="cell-size nonselect" onclick="clickCheckBox(event, ${index})">${formatSize(file.size).join(" ")}</td>
+  <td class="cell-mtime nonselect" onclick="changeCheckBox(event, ${index})">${formatMtime(file.mtime)}</td>
+  <td class="cell-size nonselect" onclick="changeCheckBox(event, ${index})">${formatSize(file.size).join(" ")}</td>
   ${actionCell}
 </tr>`)
 }
 
-function clickCheckBox(event, index) {
+
+/**
+ * 
+ * @param {click event} event 
+ * @param {index, url, idDir} openURLObj 
+ */
+function openURL(event, url, isDir) {
+  if (isDir) {
+    window.location.href = url;
+  } else {
+    window.open(url);
+  }
+}
+
+/**
+ * 
+ * @param {onclick event} event 
+ * @param {number, the index of path} index 
+ */
+function changeCheckBox(event, index) {
+  const checkbox = document.querySelector(`input[name="select[]"][value="${index}"]`);
+  const value = checkbox.checked;
+
   if (!!!event.shiftKey) {
     const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
     selectAllCheckbox.checked = false;
@@ -595,8 +617,7 @@ function clickCheckBox(event, index) {
     });
   }
 
-  const checkbox = document.querySelector(`input[name="select[]"][value="${index}"]`);
-  checkbox.checked = !checkbox.checked;
+  checkbox.checked = !value;
   toggleCheckBox();
 }
 
