@@ -578,13 +578,16 @@ function openContextMenu(e, index) {
 
   const file = DATA.paths[index];
   let url = newUrl(file.name)
+  let isDir = file.path_type.endsWith("Dir");
+
+  let actionOpen = `<li><a class="menu-href" href="${url}" ${isDir ? "" : `target="_blank"`}>打开</a></li>`;
   let actionDelete = "";
   let actionDownload = "";
+  let actionRename = "";
   let actionMove = "";
   let actionEdit = "";
   let actionView = "";
   let actionCopyPath = `<li onclick="copyPath(${index})" title="复制路径" target="_blank">复制路径</li>`
-  let isDir = file.path_type.endsWith("Dir");
   if (isDir) {
     url += "/";
     if (DATA.allow_archive) {
@@ -601,7 +604,8 @@ function openContextMenu(e, index) {
   }
   if (DATA.allow_delete) {
     if (DATA.allow_upload) {
-      actionMove = `<li onclick="movePath(${index})" id="moveBtn${index}" title="移动或重命名">移动或重命名</li>`;
+      actionRename = `<li onclick="renamePath(${index})" id="renameBtn${index}" title="重命名">重命名</li>`;
+      actionMove = `<li onclick="movePath(${index})" id="moveBtn${index}" title="移动">移动</li>`;
       if (!isDir) {
         actionEdit = `<li><a class="menu-href" title="编辑" target="_blank" href="${url}?edit">编辑</a></li>`;
       }
@@ -614,8 +618,10 @@ function openContextMenu(e, index) {
   }
   let actions = `
   <ul>
+    ${actionOpen}
     ${actionDownload}
     ${actionView}
+    ${actionRename}
     ${actionMove}
     ${actionDelete}
     ${actionEdit}
@@ -919,6 +925,16 @@ async function doDeletePath(name, url, cb) {
   }
 }
 
+async function renamePath(index) {
+  cleanContextMenu();
+  const file = DATA.paths[index];
+  if (!file) return;
+  const newFileUrl = await doRenamePath(file.name);
+  if (newFileUrl) {
+    location.href = newFileUrl.split("/").slice(0, -1).join("/");
+  }
+}
+
 /**
  * Move path
  * @param {number} index
@@ -952,6 +968,45 @@ function urlToRootPath(fileUrl) {
   pathSegments[1] = ROOT;
   const filePath = decodeURIComponent(pathSegments.join('/'));
   return [filePath, firstSegment]
+}
+
+/**
+ * 
+ * @param {string, filename} name 
+ * @returns 
+ */
+async function doRenamePath(name) {
+  let newName = prompt("新文件名", name)
+  if (!newName) return;
+  if (newName === name) return;
+  if (newName.includes("/")) {
+    alert(`文件名不能带有/`);
+    return;
+  }
+
+  const fileUrl = newUrl(name);
+  const newFileUrl = newUrl(newName);
+  try {
+    await checkAuth();
+    const res1 = await fetch(newFileUrl, {
+      method: "HEAD",
+    });
+    if (res1.status === 200) {
+      if (!confirm("是否覆盖？")) {
+        return;
+      }
+    }
+    const res2 = await fetch(fileUrl, {
+      method: "MOVE",
+      headers: {
+        "Destination": newFileUrl,
+      }
+    });
+    await assertResOK(res2);
+    return newFileUrl;
+  } catch (err) {
+    alert(`无法将 ${name} 重命名为 ${newName}, ${err.message}`);
+  }
 }
 
 const ROOT = "root";
