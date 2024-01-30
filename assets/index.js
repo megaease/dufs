@@ -359,7 +359,7 @@ function setupIndexPage() {
   renderPathsTableHead();
   renderPathsTableBody();
 
-  monitorKeys();
+  monitorIndexPageEvents();
 }
 
 
@@ -374,7 +374,10 @@ function toggleCheckBox() {
   checkboxes.forEach((checkbox, index) => {
     console.log(`checkbox index ${index}, value ${checkbox.checked}`)
     if (checkbox.checked) {
+      checkbox.closest('tr').classList.add('selected')
       selectedItems.push(index)
+    } else {
+      checkbox.closest('tr').classList.remove('selected')
     }
   })
   console.log("toggleCheckBox", selectedItems)
@@ -427,7 +430,7 @@ function updateSelectedItems(item, isSelected) {
   updateDeleteButtonVisibility();
 };
 
-function monitorKeys() {
+function monitorIndexPageEvents() {
   const checkboxes = document.querySelectorAll('input[name="select[]"]');
   const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
 
@@ -439,8 +442,25 @@ function monitorKeys() {
         checkbox.checked = false;
       });
       toggleCheckBox();
+      cleanContextMenu();
     }
   })
+
+  document.addEventListener('click', function (event) {
+    const menu = document.getElementById('customContextMenu');
+    const isClickInsideMenu = menu.contains(event.target);
+    const isTriggerElement = event.target.classList.contains('context-menu-trigger');
+
+    if (!isClickInsideMenu && !isTriggerElement) {
+      cleanContextMenu();
+    }
+  });
+}
+
+function cleanContextMenu() {
+  const menu = document.getElementById('customContextMenu');
+  menu.innerHTML = ""
+  menu.style.display = 'none';
 }
 
 function updateDeleteButtonVisibility() {
@@ -574,23 +594,94 @@ function addPath(file, index) {
   </td>
   <td class="path cell-name nonselect" 
     onclick="clickPathChangeCheckBox(event, ${index})" 
-    ondblclick="dblclickPathOpenURL(event, '${index}', '${url}', ${isDir})">
+    ondblclick="dblclickPathOpenURL(event, '${index}', '${url}', ${isDir})"
+    oncontextmenu="openContextMenu(event, ${index})" 
+  >
     <a >${encodedName}</a>
   </td>
   <td class="cell-mtime nonselect" 
     onclick="clickPathChangeCheckBox(event, ${index})"
     ondblclick="dblclickPathOpenURL(event, '${index}', '${url}', ${isDir})"
+    oncontextmenu="openContextMenu(event, ${index})" 
   >
     ${formatMtime(file.mtime)}
   </td>
   <td class="cell-size nonselect" 
     onclick="clickPathChangeCheckBox(event, ${index})"
     ondblclick="dblclickPathOpenURL(event, '${index}', '${url}', ${isDir})"
+    oncontextmenu="openContextMenu(event, ${index})" 
   >
     ${formatSize(file.size).join(" ")}
   </td>
   ${actionCell}
 </tr>`)
+}
+
+function openContextMenu(e, index) {
+  e.preventDefault()
+
+  const file = DATA.paths[index];
+  let url = newUrl(file.name)
+  let actionDelete = "";
+  let actionDownload = "";
+  let actionMove = "";
+  let actionEdit = "";
+  let actionView = "";
+  let actionCopyPath = `<li onclick="copyPath(${index})" title="复制路径" target="_blank">复制路径</li>`
+  let isDir = file.path_type.endsWith("Dir");
+  if (isDir) {
+    url += "/";
+    if (DATA.allow_archive) {
+      actionDownload = `
+      <li>
+        <a class="menu-href" href="${url}?zip" title="打包并下载">打包并下载</a>
+      </li>`;
+    }
+  } else {
+    actionDownload = `
+    <li>
+      <a class="menu-href" href="${url}" title="下载" download>下载</a>
+    </li>`;
+  }
+  if (DATA.allow_delete) {
+    if (DATA.allow_upload) {
+      actionMove = `<li onclick="movePath(${index})" id="moveBtn${index}" title="移动或重命名">移动或重命名</li>`;
+      if (!isDir) {
+        actionEdit = `<li><a class="menu-href" title="编辑" target="_blank" href="${url}?edit">编辑</a></li>`;
+      }
+    }
+    actionDelete = `
+    <li onclick="deletePath(${index})" id="deleteBtn${index}" title="删除">删除</li>`;
+  }
+  if (!actionEdit && !isDir) {
+    actionView = `<li><a class="menu-href" title="查看" target="_blank" href="${url}?view">${ICONS.view}</a></li>`;
+  }
+  let actions = `
+  <ul>
+    ${actionDownload}
+    ${actionView}
+    ${actionMove}
+    ${actionDelete}
+    ${actionEdit}
+    ${actionCopyPath}
+  </ul>`
+
+  const menus = document.getElementById('customContextMenu');
+  menus.classList.remove('hidden');
+  menus.innerHTML = `${actions}`
+  menus.style.display = 'block';
+  menus.style.left = e.pageX + 'px';
+  menus.style.top = e.pageY + 'px';
+
+  const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
+  selectAllCheckbox.checked = false;
+  const checkboxes = document.querySelectorAll('input[name="select[]"]');
+  checkboxes.forEach(checkbox => {
+    checkbox.checked = false;
+  });
+  const checkbox = document.querySelector(`input[name="select[]"][value="${index}"]`);
+  checkbox.checked = true
+  toggleCheckBox();
 }
 
 // key is index, value is timer
@@ -803,6 +894,7 @@ async function setupEditorPage() {
  * @returns
  */
 async function deletePath(index) {
+  cleanContextMenu();
   const file = DATA.paths[index];
   if (!file) return;
   await doDeletePath(file.name, newUrl(file.name), () => {
@@ -877,6 +969,7 @@ async function doDeletePath(name, url, cb) {
  * @returns
  */
 async function movePath(index) {
+  cleanContextMenu();
   const file = DATA.paths[index];
   if (!file) return;
   const fileUrl = newUrl(file.name);
