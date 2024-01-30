@@ -35,21 +35,21 @@ body {
     padding-right: 0.6em;
 }
 
-.breadcrumb > a {
+.breadcrumb>a {
     color: #0366d6;
     text-decoration: none;
 }
 
-.breadcrumb > a:hover {
+.breadcrumb>a:hover {
     text-decoration: underline;
 }
 
 /* final breadcrumb */
-.breadcrumb > b {
+.breadcrumb>b {
     color: #24292e;
 }
 
-.breadcrumb > .separator {
+.breadcrumb>.separator {
     color: #586069;
     padding: 0 0.25em;
 }
@@ -64,8 +64,8 @@ body {
     margin-right: 10px;
 }
 
-.toolbox > a,
-.toolbox > div {
+.toolbox>a,
+.toolbox>div {
     /* vertically align with breadcrumb text */
     height: 1.1rem;
 }
@@ -148,7 +148,7 @@ body {
     text-decoration: none;
 }
 
-.paths-table thead a > span {
+.paths-table thead a>span {
     padding-left: 2px;
 }
 
@@ -261,7 +261,7 @@ body {
     }
 
     html,
-    .breadcrumb > b,
+    .breadcrumb>b,
     .searchbar #search {
         color: #fff;
     }
@@ -312,7 +312,8 @@ body {
 
 button {
     /* Generic styles for all buttons */
-    background-color: #f44336; /* A red color for the delete action */
+    background-color: #f44336;
+    /* A red color for the delete action */
     color: white;
     border: none;
     border-radius: 5px;
@@ -336,4 +337,11 @@ button:focus {
     /* Add a focus style to maintain accessibility */
     outline: none;
     box-shadow: 0 0 0 3px rgba(244, 67, 54, 0.5);
+}
+
+.nonselect {
+    cursor: default;
+    /* Change cursor to default pointer */
+    user-select: none;
+    /* Prevent text selection */
 }

@@ -121,6 +121,7 @@ function ready() {
     document.querySelector(".editor-page").classList.remove("hidden");;
 
     setupEditorPage();
+
   } else if (DATA.kind == "View") {
     document.title = `View ${DATA.href} - Dufs`;
     document.querySelector(".editor-page").classList.remove("hidden");;
@@ -351,8 +352,9 @@ function setupIndexPage() {
   renderPathsTableHead();
   renderPathsTableBody();
 
-  monitorCheckbox();
+  monitorKeys();
 }
+
 
 /**
  * Toggle multi-item
@@ -361,9 +363,24 @@ function setupIndexPage() {
  */
 function toggleCheckBox() {
   const checkboxes = document.querySelectorAll('input[name="select[]"]');
+  selectedItems.splice(0, selectedItems.length);
+  checkboxes.forEach((checkbox, index) => {
+    console.log(`checkbox index ${index}, value ${checkbox.checked}`)
+    if (checkbox.checked) {
+      selectedItems.push(index)
+    }
+  })
+  console.log("toggleCheckBox", selectedItems)
   const isAnyChecked = Array.from(checkboxes).some(checkbox => checkbox.checked);
+  const isAllChecked = Array.from(checkboxes).every(checkbox => checkbox.checked);
   const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
   updateDeleteButtonVisibility();
+
+  if (isAllChecked) {
+    selectAllCheckbox.checked = true;
+  } else {
+    selectAllCheckbox.checked = false;
+  }
 
   if (isAnyChecked) {
     if (!$deleteButton.querySelector('button')) {
@@ -390,8 +407,8 @@ function toggleSelectAll(selectAllCheckbox) {
   checkboxes.forEach(checkbox => {
     checkbox.checked = selectAllCheckbox.checked;
   });
-
   toggleCheckBox();
+  console.log("toggleSelectAll selected items", selectedItems)
 }
 
 function deleteSelectedItems() {
@@ -403,40 +420,20 @@ function deleteSelectedItems() {
  */
 const selectedItems = [];
 
-function monitorCheckbox() {
+function updateSelectedItems(item, isSelected) {
+  const index = selectedItems.indexOf(item);
+  if (isSelected) {
+    // Not in array return -1
+    if (index === -1) selectedItems.push(item);
+  } else {
+    if (index !== -1) selectedItems.splice(index, 1);
+  }
+  updateDeleteButtonVisibility();
+};
+
+function monitorKeys() {
   const checkboxes = document.querySelectorAll('input[name="select[]"]');
   const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
-
-  const updateSelectedItems = (item, isSelected) => {
-    const index = selectedItems.indexOf(item);
-    if (isSelected) {
-      // Not in array return -1
-      if (index === -1) selectedItems.push(item);
-    } else {
-      if (index !== -1) selectedItems.splice(index, 1);
-    }
-    updateDeleteButtonVisibility();
-  };
-
-  // Assign event listeners to checkboxes
-  checkboxes.forEach((checkbox) => {
-    checkbox.addEventListener('change', (e) => {
-      updateSelectedItems(e.target.value, e.target.checked);
-    });
-  });
-
-  selectAllCheckbox.addEventListener('change', (e) => {
-    const isAllChecked = e.target.checked;
-    checkboxes.forEach((checkbox) => {
-      checkbox.checked = isAllChecked;
-    });
-    // Directly update the selectedItems in bulk
-    selectedItems.splice(0, selectedItems.length);
-    if (isAllChecked) {
-      selectedItems.push(...Array.from(checkboxes).map(checkbox => checkbox.value));
-    }
-    updateDeleteButtonVisibility();
-  });
 
   // listen to esc key
   document.addEventListener('keydown', (e) => {
@@ -445,8 +442,7 @@ function monitorCheckbox() {
       checkboxes.forEach((checkbox) => {
         checkbox.checked = false;
       });
-      selectedItems.splice(0, selectedItems.length);
-      updateDeleteButtonVisibility();
+      toggleCheckBox();
     }
   })
 }
@@ -577,16 +573,31 @@ function addPath(file, index) {
   $pathsTableBody.insertAdjacentHTML("beforeend", `
 <tr id="addPath${index}">
   <td><input type="checkbox" name="select[]" value="${index}" onchange="toggleCheckBox()"></td>
-  <td class="path cell-icon">
+  <td class="path cell-icon" onclick="clickCheckBox(event, ${index})">
     ${getPathSvg(file.path_type)}
   </td>
-  <td class="path cell-name">
+  <td class="path cell-name nonselect" onclick="clickCheckBox(event, ${index})">
     <a href="${url}" ${isDir ? "" : `target="_blank"`}>${encodedName}</a>
   </td>
-  <td class="cell-mtime">${formatMtime(file.mtime)}</td>
-  <td class="cell-size">${formatSize(file.size).join(" ")}</td>
+  <td class="cell-mtime nonselect" onclick="clickCheckBox(event, ${index})">${formatMtime(file.mtime)}</td>
+  <td class="cell-size nonselect" onclick="clickCheckBox(event, ${index})">${formatSize(file.size).join(" ")}</td>
   ${actionCell}
 </tr>`)
+}
+
+function clickCheckBox(event, index) {
+  if (!!!event.shiftKey) {
+    const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
+    selectAllCheckbox.checked = false;
+    const checkboxes = document.querySelectorAll('input[name="select[]"]');
+    checkboxes.forEach(checkbox => {
+      checkbox.checked = false;
+    });
+  }
+
+  const checkbox = document.querySelector(`input[name="select[]"][value="${index}"]`);
+  checkbox.checked = !checkbox.checked;
+  toggleCheckBox();
 }
 
 function setupDropzone() {
