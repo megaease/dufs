@@ -569,14 +569,26 @@ function addPath(file, index) {
   $pathsTableBody.insertAdjacentHTML("beforeend", `
 <tr id="addPath${index}">
   <td><input type="checkbox" name="select[]" value="${index}" onchange="toggleCheckBox()"></td>
-  <td class="path cell-icon" onclick="changeCheckBox(event, ${index})">
+  <td class="path cell-icon" onclick="clickPathChangeCheckBox(event, ${index})">
     ${getPathSvg(file.path_type)}
   </td>
-  <td class="path cell-name nonselect" onclick="changeCheckBox(event, ${index})" ondblclick="openURL(event, '${index}', '${url}', ${isDir})">
+  <td class="path cell-name nonselect" 
+    onclick="clickPathChangeCheckBox(event, ${index})" 
+    ondblclick="dblclickPathOpenURL(event, '${index}', '${url}', ${isDir})">
     <a >${encodedName}</a>
   </td>
-  <td class="cell-mtime nonselect" onclick="changeCheckBox(event, ${index})">${formatMtime(file.mtime)}</td>
-  <td class="cell-size nonselect" onclick="changeCheckBox(event, ${index})">${formatSize(file.size).join(" ")}</td>
+  <td class="cell-mtime nonselect" 
+    onclick="clickPathChangeCheckBox(event, ${index})"
+    ondblclick="dblclickPathOpenURL(event, '${index}', '${url}', ${isDir})"
+  >
+    ${formatMtime(file.mtime)}
+  </td>
+  <td class="cell-size nonselect" 
+    onclick="clickPathChangeCheckBox(event, ${index})"
+    ondblclick="dblclickPathOpenURL(event, '${index}', '${url}', ${isDir})"
+  >
+    ${formatSize(file.size).join(" ")}
+  </td>
   ${actionCell}
 </tr>`)
 }
@@ -589,7 +601,7 @@ const checkBoxTimer = {};
  * @param {click event} event 
  * @param {index, url, idDir} openURLObj 
  */
-function openURL(event, index, url, isDir) {
+function dblclickPathOpenURL(event, index, url, isDir) {
   const timer = checkBoxTimer[index]
   if (timer) {
     clearTimeout(timer);
@@ -607,7 +619,7 @@ function openURL(event, index, url, isDir) {
  * @param {onclick event} event 
  * @param {number, the index of path} index 
  */
-function changeCheckBox(event, index) {
+function clickPathChangeCheckBox(event, index) {
   const timer = checkBoxTimer[index]
   if (timer) {
     clearTimeout(timer);
@@ -628,7 +640,7 @@ function changeCheckBox(event, index) {
 
     checkbox.checked = !value;
     toggleCheckBox();
-  }, 200);
+  }, 150);
 }
 
 function setupDropzone() {
