@@ -511,7 +511,6 @@ function renderPathsTableHead() {
     const icon = `<span>${svg}</span>`
     return `<th class="cell-${item.name}" ${item.props}><a href="?${qs}">${item.text}${icon}</a></th>`
   }).join("\n")}
-      <th class="cell-actions">操作</th>
     </tr>
   `);
 }
@@ -542,49 +541,7 @@ function renderPathsTableBody() {
 function addPath(file, index) {
   const encodedName = encodedStr(file.name);
   let url = newUrl(file.name)
-  let actionDelete = "";
-  let actionDownload = "";
-  let actionMove = "";
-  let actionEdit = "";
-  let actionView = "";
-  let actionCopyPath = `<div onclick="copyPath(${index})" class="action-btn" title="复制路径" target="_blank">${ICONS.copy}</div>`
   let isDir = file.path_type.endsWith("Dir");
-  if (isDir) {
-    url += "/";
-    if (DATA.allow_archive) {
-      actionDownload = `
-      <div class="action-btn">
-        <a href="${url}?zip" title="打包并下载">${ICONS.download}</a>
-      </div>`;
-    }
-  } else {
-    actionDownload = `
-    <div class="action-btn" >
-      <a href="${url}" title="下载" download>${ICONS.download}</a>
-    </div>`;
-  }
-  if (DATA.allow_delete) {
-    if (DATA.allow_upload) {
-      actionMove = `<div onclick="movePath(${index})" class="action-btn" id="moveBtn${index}" title="移动或重命名">${ICONS.move}</div>`;
-      if (!isDir) {
-        actionEdit = `<a class="action-btn" title="编辑" target="_blank" href="${url}?edit">${ICONS.edit}</a>`;
-      }
-    }
-    actionDelete = `
-    <div onclick="deletePath(${index})" class="action-btn" id="deleteBtn${index}" title="删除">${ICONS.delete}</div>`;
-  }
-  if (!actionEdit && !isDir) {
-    actionView = `<a class="action-btn" title="查看" target="_blank" href="${url}?view">${ICONS.view}</a>`;
-  }
-  let actionCell = `
-  <td class="cell-actions">
-    ${actionDownload}
-    ${actionView}
-    ${actionMove}
-    ${actionDelete}
-    ${actionEdit}
-    ${actionCopyPath}
-  </td>`
 
   $pathsTableBody.insertAdjacentHTML("beforeend", `
 <tr id="addPath${index}">
@@ -613,7 +570,6 @@ function addPath(file, index) {
   >
     ${formatSize(file.size).join(" ")}
   </td>
-  ${actionCell}
 </tr>`)
 }
 
