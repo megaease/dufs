@@ -10,10 +10,20 @@
     DATA = __INDEX_DATA__
   </script>
   <script src="__ASSETS_PREFIX__index.js"></script>
+  <script src="https://code.jquery.com/jquery.min.js"></script>
+  <link rel="stylesheet" href="//code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+  <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"
+    integrity="sha256-lSjKY0/srUM9BE3dPm+c4fBo1dky2v27Gdjm2uoZaL0=" crossorigin="anonymous"></script>
+  <script src="https://mbraak.github.io/jqTree/tree.jquery.js"></script>
+  <link rel="stylesheet" href="https://mbraak.github.io/jqTree/jqtree.css">
 </head>
 
 <body>
   <div class="hidden hints" id="operationHints"></div>
+  <div id="treeDialog" title="请选择路径：">
+    <div id="tree"></div>
+    <div id="selectedPath"></div>
+  </div>
   <div class="head">
     <div class="breadcrumb"></div>
     <div class="toolbox">

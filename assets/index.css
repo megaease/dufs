@@ -414,3 +414,8 @@ button:focus {
 .menu-href:focus {
     text-decoration: none;
 }
+
+#tree {
+    height: 350px;
+    overflow-y: auto;
+}
