@@ -352,11 +352,18 @@ function setupIndexPage() {
   }
 
   // setupDeleteButton();
-  const deleteBtn = document.getElementById('delete-btn');
+  const batchBtns = document.getElementById('batch-operation-btn');
   const removeButton = document.createElement('button');
+  removeButton.classList.add("toolbox-btn-red")
   removeButton.textContent = '批量删除';
   removeButton.addEventListener('click', deleteSelectedItems);
-  deleteBtn.appendChild(removeButton);
+  batchBtns.appendChild(removeButton);
+  // setupMoveButton();
+  const batchMoveBtn = document.createElement('button');
+  batchMoveBtn.classList.add("toolbox-btn")
+  batchMoveBtn.textContent = '批量移动';
+  batchMoveBtn.addEventListener('click', moveSelectedItems);
+  batchBtns.appendChild(batchMoveBtn);
 
   renderPathsTableHead();
   renderPathsTableBody();
@@ -386,7 +393,7 @@ function toggleCheckBox() {
   const isAnyChecked = Array.from(checkboxes).some(checkbox => checkbox.checked);
   const isAllChecked = Array.from(checkboxes).every(checkbox => checkbox.checked);
   const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
-  updateDeleteButtonVisibility();
+  updateBatchButtonVisibility();
 
   if (isAllChecked) {
     selectAllCheckbox.checked = true;
@@ -413,7 +420,18 @@ function toggleSelectAll(selectAllCheckbox) {
 }
 
 function deleteSelectedItems() {
-  deleteBatchPaths(selectedItems);
+  const items = [...selectedItems]
+  selectedItems.splice(0, selectedItems.length);
+  updateBatchButtonVisibility();
+  deleteBatchPaths(items);
+}
+
+function moveSelectedItems() {
+  mylog("moveSelectedItems", selectedItems)
+  const items = [...selectedItems]
+  selectedItems.splice(0, selectedItems.length);
+  updateBatchButtonVisibility();
+  moveBatchPaths(items);
 }
 
 /**
@@ -429,7 +447,7 @@ function updateSelectedItems(item, isSelected) {
   } else {
     if (index !== -1) selectedItems.splice(index, 1);
   }
-  updateDeleteButtonVisibility();
+  updateBatchButtonVisibility();
 };
 
 function monitorIndexPageEvents() {
@@ -465,12 +483,12 @@ function cleanContextMenu() {
   menu.style.display = 'none';
 }
 
-function updateDeleteButtonVisibility() {
-  const deleteButton = document.getElementById('delete-btn');
+function updateBatchButtonVisibility() {
+  const batchBtns = document.getElementById('batch-operation-btn');
   if (selectedItems.length > 0) {
-    deleteButton.classList.remove('disabled');
+    batchBtns.classList.remove('disabled');
   } else {
-    deleteButton.classList.add('disabled');
+    batchBtns.classList.add('disabled');
   }
 }
 
@@ -497,7 +515,7 @@ function renderPathsTableHead() {
   ];
   $pathsTableHead.insertAdjacentHTML("beforeend", `
     <tr>
-      <th><input class="hidden" type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)"></th>
+      <th><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)"></th>
       ${headerItems.map(item => {
     let svg = `<svg width="12" height="12" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.5 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 1 0 .708.708L11 2.707V14.5a.5.5 0 0 0 .5.5zm-7-14a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L4 13.293V1.5a.5.5 0 0 1 .5-.5z"/></svg>`;
     let order = "desc";
@@ -589,6 +607,7 @@ function openContextMenu(e, index) {
   let actionMove = "";
   let actionEdit = "";
   let actionView = "";
+  let actionCopyFile = "";
   let actionCopyPath = `<li class="contextMenuItem" onclick="copyPath(${index})" title="复制路径" target="_blank">复制路径</li>`
   if (isDir) {
     url += "/";
@@ -610,6 +629,7 @@ function openContextMenu(e, index) {
       actionMove = `<li class="contextMenuItem" onclick="movePathByFileTree(${index})" id="moveBtn${index}" title="移动">移动</li>`;
       if (!isDir) {
         actionEdit = `<li class="contextMenuItem"><a class="menu-href" title="编辑" target="_blank" href="${url}?edit">编辑</a></li>`;
+        actionCopyFile = `<li class="contextMenuItem" onclick="copyFile(${index})" id="copyFileBtn${index}" title="拷贝">拷贝</li>`;
       }
     }
     actionDelete = `
@@ -627,6 +647,7 @@ function openContextMenu(e, index) {
     ${actionMove}
     ${actionDelete}
     ${actionEdit}
+    ${actionCopyFile}
     ${actionCopyPath}
   </ul>`
 
@@ -868,12 +889,10 @@ async function deletePath(index) {
   const file = DATA.paths[index];
   if (!file) return;
   await doDeletePath(file.name, newUrl(file.name), () => {
-    $deleteButton = document.getElementById("delete-btn");
     document.getElementById(`addPath${index}`)?.remove();
     DATA.paths[index] = null;
     if (!DATA.paths.find(v => !!v)) {
       $pathsTable.classList.add("hidden");
-      $deleteButton.classList.add("hidden");
       $emptyFolder.textContent = dirEmptyNote;
       $emptyFolder.classList.remove("hidden");
     }
@@ -885,25 +904,48 @@ async function deletePath(index) {
  * @param {[]} selectedItems
  * @returns
  */
-async function deleteBatchPaths(selectedItems) {
-  if (selectedItems.length === 0) return;
+async function deleteBatchPaths(items) {
+  if (items.length === 0) return;
   if (!confirm(`是否删除选中的文件 ?`)) return;
-  document.getElementById("delete-btn").classList.add("hidden");
-  for (const index of selectedItems) {
+  for (const index of items) {
     const file = DATA.paths[index];
     if (!file) continue;
     await doDeletePathWithoutComfirm(newUrl(file.name), () => {
-      $deleteButton = document.getElementById("delete-btn");
       document.getElementById(`addPath${index}`)?.remove();
       DATA.paths[index] = null;
       if (!DATA.paths.find(v => !!v)) {
         $pathsTable.classList.add("hidden");
-        $deleteButton.classList.add("hidden");
         $emptyFolder.textContent = dirEmptyNote;
         $emptyFolder.classList.remove("hidden");
       }
     })
   }
+}
+
+async function moveBatchPaths(items) {
+  const buttons = {
+    "确认": async function () {
+      let newFileUrl = ""
+      for (const index of items) {
+        mylog("dialog 确认", index, selectedPath);
+        $(this).dialog("close");
+        newFileUrl = await doMovePathByFileTree(index)
+      }
+      location.href = newFileUrl.split("/").slice(0, -1).join("/");
+    },
+    "取消": function () {
+      mylog("dialog 取消");
+      $(this).dialog("close");
+    }
+  }
+  $('#treeDialog').dialog('option', 'buttons', buttons)
+  $('#treeDialog').dialog('open')
+  listPath("").then(data => {
+    mylog("data", data)
+    const nodes = pathDataToNodes(data, true)
+    mylog("nodes", nodes)
+    $('#tree').tree("loadData", nodes);
+  })
 }
 
 async function doDeletePathWithoutComfirm(url, callback) {
@@ -986,6 +1028,41 @@ function movePathByFileTree(index) {
     mylog("nodes", nodes)
     $('#tree').tree("loadData", nodes);
   })
+}
+
+async function copyFile(index) {
+  const file = DATA.paths[index];
+  const name = file.name
+  let newName = prompt("拷贝副本文件名", name)
+  if (!newName) return;
+  if (newName === name) return;
+  if (newName.includes("/")) {
+    alert(`文件名不能带有/`);
+    return;
+  }
+  let fileUrl = newUrl(name)
+  let newFileUrl = newUrl(newName);
+  try {
+    await checkAuth();
+    const res1 = await fetch(newFileUrl, {
+      method: "HEAD",
+    });
+    if (res1.status === 200) {
+      if (!confirm(`文件 ${newName} 已存在，是否覆盖？`)) {
+        return;
+      }
+    }
+    const res2 = await fetch(fileUrl, {
+      method: "COPY",
+      headers: {
+        "Destination": newFileUrl,
+      }
+    });
+    await assertResOK(res2);
+    window.location.reload();
+  } catch (err) {
+    alert(`无法拷贝, ${err.message}`);
+  }
 }
 
 async function doMovePathByFileTree(index) {

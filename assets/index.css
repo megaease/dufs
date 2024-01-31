@@ -73,6 +73,14 @@ body {
     text-decoration: none;
 }
 
+.toolbox-btn-red {
+    display: flex;
+    align-items: center;
+    padding: 0.3em 0.6em;
+    cursor: pointer;
+    text-decoration: none;
+}
+
 .toolbox-btn:hover {
     background-color: #3499ff;
 }
@@ -165,7 +173,7 @@ body {
     padding-left: 2px;
 }
 
-.paths-table tbody tr:hover {
+.paths-table tbody tr:not(.selected):hover {
     background-color: #fafafa;
 }
 
@@ -318,7 +326,7 @@ body {
 
 }
 
-#delete-btn {
+#batch-operation-btn {
     margin-top: 10px;
     text-align: left;
 }
@@ -418,4 +426,13 @@ button:focus {
 #tree {
     height: 350px;
     overflow-y: auto;
+}
+
+.inline {
+    display: inline;
+    float: left;
+}
+
+.buttons-container {
+    display: flex;
 }
