@@ -98,6 +98,8 @@ let $userBtn;
  */
 let $userName;
 
+let mylog = console.log;
+
 function ready() {
   $pathsTable = document.querySelector(".paths-table")
   $pathsTableHead = document.querySelector(".paths-table thead");
@@ -121,6 +123,7 @@ function ready() {
     document.querySelector(".editor-page").classList.remove("hidden");;
 
     setupEditorPage();
+
   } else if (DATA.kind == "View") {
     document.title = `View ${DATA.href} - Dufs`;
     document.querySelector(".editor-page").classList.remove("hidden");;
@@ -131,11 +134,11 @@ function ready() {
 
 
 class Uploader {
-   /**
-   *
-   * @param {File} file
-   * @param {string[]} pathParts
-   */
+  /**
+  *
+  * @param {File} file
+  * @param {string[]} pathParts
+  */
   constructor(file, pathParts) {
     /**
      * @type Element
@@ -322,6 +325,10 @@ function addBreadcrumb(href, uri_prefix) {
 }
 
 function setupIndexPage() {
+  const $hints = document.querySelector("#operationHints")
+  $hints.textContent = "单击选中，双击打开，shift + 单击多选，ESC 取消，右键菜单";
+  $hints.classList.remove("hidden");
+
   if (DATA.allow_archive) {
     const $download = document.querySelector(".download");
     $download.href = baseUrl() + "?zip";
@@ -344,10 +351,25 @@ function setupIndexPage() {
     setupSearch()
   }
 
+  // setupDeleteButton();
+  const batchBtns = document.getElementById('batch-operation-btn');
+  const removeButton = document.createElement('button');
+  removeButton.classList.add("toolbox-btn-red")
+  removeButton.textContent = '批量删除';
+  removeButton.addEventListener('click', deleteSelectedItems);
+  batchBtns.appendChild(removeButton);
+  // setupMoveButton();
+  const batchMoveBtn = document.createElement('button');
+  batchMoveBtn.classList.add("toolbox-btn")
+  batchMoveBtn.textContent = '批量移动';
+  batchMoveBtn.addEventListener('click', moveSelectedItems);
+  batchBtns.appendChild(batchMoveBtn);
+
   renderPathsTableHead();
   renderPathsTableBody();
 
-  monitorCheckbox();
+  monitorIndexPageEvents();
+  initFileTree();
 }
 
 /**
@@ -356,25 +378,32 @@ function setupIndexPage() {
  * @param {*} checkbox
  */
 function toggleCheckBox() {
-    const checkboxes = document.querySelectorAll('input[name="select[]"]');
-    const isAnyChecked = Array.from(checkboxes).some(checkbox => checkbox.checked);
-    const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
-    updateDeleteButtonVisibility();
-
-    if (isAnyChecked) {
-        if (!$deleteButton.querySelector('button')) {
-            const removeButton = document.createElement('button');
-            removeButton.textContent = '批量删除';
-            removeButton.addEventListener('click', deleteSelectedItems);
-            $deleteButton.appendChild(removeButton);
-        }
+  const checkboxes = document.querySelectorAll('input[name="select[]"]');
+  selectedItems.splice(0, selectedItems.length);
+  checkboxes.forEach((checkbox, index) => {
+    mylog(`checkbox index ${index}, value ${checkbox.checked}`)
+    if (checkbox.checked) {
+      checkbox.closest('tr').classList.add('selected')
+      selectedItems.push(index)
     } else {
-        const removeButton = $deleteButton.querySelector('button');
-        if (removeButton) {
-            $deleteButton.removeChild(removeButton);
-        }
-        selectAllCheckbox.checked = false;
+      checkbox.closest('tr').classList.remove('selected')
     }
+  })
+  mylog("toggleCheckBox", selectedItems)
+  const isAnyChecked = Array.from(checkboxes).some(checkbox => checkbox.checked);
+  const isAllChecked = Array.from(checkboxes).every(checkbox => checkbox.checked);
+  const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
+  updateBatchButtonVisibility();
+
+  if (isAllChecked) {
+    selectAllCheckbox.checked = true;
+  } else {
+    selectAllCheckbox.checked = false;
+  }
+
+  if (!isAnyChecked) {
+    selectAllCheckbox.checked = false;
+  }
 }
 
 /**
@@ -382,16 +411,27 @@ function toggleCheckBox() {
  * @param {*} selectAllCheckbox
  */
 function toggleSelectAll(selectAllCheckbox) {
-    const checkboxes = document.querySelectorAll('input[name="select[]"]');
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = selectAllCheckbox.checked;
-    });
-
-    toggleCheckBox();
+  const checkboxes = document.querySelectorAll('input[name="select[]"]');
+  checkboxes.forEach(checkbox => {
+    checkbox.checked = selectAllCheckbox.checked;
+  });
+  toggleCheckBox();
+  mylog("toggleSelectAll selected items", selectedItems)
 }
 
 function deleteSelectedItems() {
-    deleteBatchPaths(selectedItems);
+  const items = [...selectedItems]
+  selectedItems.splice(0, selectedItems.length);
+  updateBatchButtonVisibility();
+  deleteBatchPaths(items);
+}
+
+function moveSelectedItems() {
+  mylog("moveSelectedItems", selectedItems)
+  const items = [...selectedItems]
+  selectedItems.splice(0, selectedItems.length);
+  updateBatchButtonVisibility();
+  moveBatchPaths(items);
 }
 
 /**
@@ -399,49 +439,57 @@ function deleteSelectedItems() {
  */
 const selectedItems = [];
 
-function monitorCheckbox() {
-    const checkboxes = document.querySelectorAll('input[name="select[]"]');
-    const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
+function updateSelectedItems(item, isSelected) {
+  const index = selectedItems.indexOf(item);
+  if (isSelected) {
+    // Not in array return -1
+    if (index === -1) selectedItems.push(item);
+  } else {
+    if (index !== -1) selectedItems.splice(index, 1);
+  }
+  updateBatchButtonVisibility();
+};
 
-    const updateSelectedItems = (item, isSelected) => {
-        const index = selectedItems.indexOf(item);
-        if (isSelected) {
-            // Not in array return -1
-            if (index === -1) selectedItems.push(item);
-        } else {
-            if (index !== -1) selectedItems.splice(index, 1);
-        }
-        updateDeleteButtonVisibility();
-    };
+function monitorIndexPageEvents() {
+  const checkboxes = document.querySelectorAll('input[name="select[]"]');
+  const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
 
-    // Assign event listeners to checkboxes
-    checkboxes.forEach((checkbox) => {
-        checkbox.addEventListener('change', (e) => {
-            updateSelectedItems(e.target.value, e.target.checked);
-        });
-    });
+  // listen to esc key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      selectAllCheckbox.checked = false;
+      checkboxes.forEach((checkbox) => {
+        checkbox.checked = false;
+      });
+      toggleCheckBox();
+      cleanContextMenu();
+    }
+  })
 
-    selectAllCheckbox.addEventListener('change', (e) => {
-        const isAllChecked = e.target.checked;
-        checkboxes.forEach((checkbox) => {
-            checkbox.checked = isAllChecked;
-        });
-        // Directly update the selectedItems in bulk
-        selectedItems.splice(0, selectedItems.length);
-        if (isAllChecked) {
-            selectedItems.push(...Array.from(checkboxes).map(checkbox => checkbox.value));
-        }
-        updateDeleteButtonVisibility();
-    });
+  document.addEventListener('click', function (event) {
+    const menu = document.getElementById('customContextMenu');
+    const isClickInsideMenu = menu.contains(event.target);
+    const isTriggerElement = event.target.classList.contains('context-menu-trigger');
+
+    if (!isClickInsideMenu && !isTriggerElement) {
+      cleanContextMenu();
+    }
+  });
 }
 
-function updateDeleteButtonVisibility() {
-    $deleteButton = document.getElementById('delete-btn');
-    if (selectedItems.length > 0) {
-        $deleteButton.classList.remove('hidden');
-    } else {
-        $deleteButton.classList.add('hidden');
-    }
+function cleanContextMenu() {
+  const menu = document.getElementById('customContextMenu');
+  menu.innerHTML = ""
+  menu.style.display = 'none';
+}
+
+function updateBatchButtonVisibility() {
+  const batchBtns = document.getElementById('batch-operation-btn');
+  if (selectedItems.length > 0) {
+    batchBtns.classList.remove('disabled');
+  } else {
+    batchBtns.classList.add('disabled');
+  }
 }
 
 /**
@@ -483,7 +531,6 @@ function renderPathsTableHead() {
     const icon = `<span>${svg}</span>`
     return `<th class="cell-${item.name}" ${item.props}><a href="?${qs}">${item.text}${icon}</a></th>`
   }).join("\n")}
-      <th class="cell-actions">操作</th>
     </tr>
   `);
 }
@@ -514,63 +561,168 @@ function renderPathsTableBody() {
 function addPath(file, index) {
   const encodedName = encodedStr(file.name);
   let url = newUrl(file.name)
+  let isDir = file.path_type.endsWith("Dir");
+
+  $pathsTableBody.insertAdjacentHTML("beforeend", `
+<tr id="addPath${index}">
+  <td><input class="hidden" type="checkbox" name="select[]" value="${index}" onchange="toggleCheckBox()"></td>
+  <td class="path cell-icon" onclick="clickPathChangeCheckBox(event, ${index})">
+    ${getPathSvg(file.path_type)}
+  </td>
+  <td class="path cell-name nonselect" 
+    onclick="clickPathChangeCheckBox(event, ${index})" 
+    ondblclick="dblclickPathOpenURL(event, '${index}', '${url}', ${isDir})"
+    oncontextmenu="openContextMenu(event, ${index})" 
+  >
+    <a >${encodedName}</a>
+  </td>
+  <td class="cell-mtime nonselect" 
+    onclick="clickPathChangeCheckBox(event, ${index})"
+    ondblclick="dblclickPathOpenURL(event, '${index}', '${url}', ${isDir})"
+    oncontextmenu="openContextMenu(event, ${index})" 
+  >
+    ${formatMtime(file.mtime)}
+  </td>
+  <td class="cell-size nonselect" 
+    onclick="clickPathChangeCheckBox(event, ${index})"
+    ondblclick="dblclickPathOpenURL(event, '${index}', '${url}', ${isDir})"
+    oncontextmenu="openContextMenu(event, ${index})" 
+  >
+    ${formatSize(file.size).join(" ")}
+  </td>
+</tr>`)
+}
+
+function openContextMenu(e, index) {
+  e.preventDefault()
+
+  const file = DATA.paths[index];
+  let url = newUrl(file.name)
+  let isDir = file.path_type.endsWith("Dir");
+
+  let actionOpen = `<li class="contextMenuItem"><a class="menu-href" href="${url}" ${isDir ? "" : `target="_blank"`}>打开</a></li>`;
   let actionDelete = "";
   let actionDownload = "";
+  let actionRename = "";
   let actionMove = "";
   let actionEdit = "";
   let actionView = "";
-  let actionCopyPath = `<div onclick="copyPath(${index})" class="action-btn" title="复制路径" target="_blank">${ICONS.copy}</div>`
-  let isDir = file.path_type.endsWith("Dir");
+  let actionCopyFile = "";
+  let actionCopyPath = `<li class="contextMenuItem" onclick="copyPath(${index})" title="复制路径" target="_blank">复制路径</li>`
   if (isDir) {
     url += "/";
     if (DATA.allow_archive) {
       actionDownload = `
-      <div class="action-btn">
-        <a href="${url}?zip" title="打包并下载">${ICONS.download}</a>
-      </div>`;
+      <li class="contextMenuItem">
+        <a class="menu-href" href="${url}?zip" title="打包并下载">打包并下载</a>
+      </li>`;
     }
   } else {
     actionDownload = `
-    <div class="action-btn" >
-      <a href="${url}" title="下载" download>${ICONS.download}</a>
-    </div>`;
+    <li class="contextMenuItem">
+      <a class="menu-href" href="${url}" title="下载" download>下载</a>
+    </li>`;
   }
   if (DATA.allow_delete) {
     if (DATA.allow_upload) {
-      actionMove = `<div onclick="movePath(${index})" class="action-btn" id="moveBtn${index}" title="移动或重命名">${ICONS.move}</div>`;
+      actionRename = `<li class="contextMenuItem" onclick="renamePath(${index})" id="renameBtn${index}" title="重命名">重命名</li>`;
+      actionMove = `<li class="contextMenuItem" onclick="movePathByFileTree(${index})" id="moveBtn${index}" title="移动">移动</li>`;
       if (!isDir) {
-        actionEdit = `<a class="action-btn" title="编辑" target="_blank" href="${url}?edit">${ICONS.edit}</a>`;
+        actionEdit = `<li class="contextMenuItem"><a class="menu-href" title="编辑" target="_blank" href="${url}?edit">编辑</a></li>`;
+        actionCopyFile = `<li class="contextMenuItem" onclick="copyFile(${index})" id="copyFileBtn${index}" title="拷贝">拷贝</li>`;
       }
     }
     actionDelete = `
-    <div onclick="deletePath(${index})" class="action-btn" id="deleteBtn${index}" title="删除">${ICONS.delete}</div>`;
+    <li class="contextMenuItem" onclick="deletePath(${index})" id="deleteBtn${index}" title="删除">删除</li>`;
   }
   if (!actionEdit && !isDir) {
-    actionView = `<a class="action-btn" title="查看" target="_blank" href="${url}?view">${ICONS.view}</a>`;
+    actionView = `<li class="contextMenuItem"><a class="menu-href" title="查看" target="_blank" href="${url}?view">${ICONS.view}</a></li>`;
   }
-  let actionCell = `
-  <td class="cell-actions">
+  let actions = `
+  <ul>
+    ${actionOpen}
     ${actionDownload}
     ${actionView}
+    ${actionRename}
     ${actionMove}
     ${actionDelete}
     ${actionEdit}
+    ${actionCopyFile}
     ${actionCopyPath}
-  </td>`
+  </ul>`
 
-  $pathsTableBody.insertAdjacentHTML("beforeend", `
-<tr id="addPath${index}">
-  <td><input type="checkbox" name="select[]" value="${index}" onchange="toggleCheckBox()"></td>
-  <td class="path cell-icon">
-    ${getPathSvg(file.path_type)}
-  </td>
-  <td class="path cell-name">
-    <a href="${url}" ${isDir ? "" : `target="_blank"`}>${encodedName}</a>
-  </td>
-  <td class="cell-mtime">${formatMtime(file.mtime)}</td>
-  <td class="cell-size">${formatSize(file.size).join(" ")}</td>
-  ${actionCell}
-</tr>`)
+  const menus = document.getElementById('customContextMenu');
+  menus.classList.remove('hidden');
+  menus.innerHTML = `${actions}`
+  menus.style.display = 'block';
+  menus.style.left = e.pageX + 'px';
+  menus.style.top = e.pageY + 'px';
+
+  document.querySelectorAll(".contextMenuItem").forEach(item => {
+    item.addEventListener("click", () => {
+      menus.style.display = 'none';
+    })
+  })
+
+  const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
+  selectAllCheckbox.checked = false;
+  const checkboxes = document.querySelectorAll('input[name="select[]"]');
+  checkboxes.forEach(checkbox => {
+    checkbox.checked = false;
+  });
+  const checkbox = document.querySelector(`input[name="select[]"][value="${index}"]`);
+  checkbox.checked = true
+  toggleCheckBox();
+}
+
+// key is index, value is timer
+const checkBoxTimer = {};
+
+/**
+ * 
+ * @param {click event} event 
+ * @param {index, url, idDir} openURLObj 
+ */
+function dblclickPathOpenURL(event, index, url, isDir) {
+  const timer = checkBoxTimer[index]
+  if (timer) {
+    clearTimeout(timer);
+    delete checkBoxTimer[index];
+  }
+  if (isDir) {
+    window.location.href = url;
+  } else {
+    window.open(url);
+  }
+}
+
+/**
+ * 
+ * @param {onclick event} event 
+ * @param {number, the index of path} index 
+ */
+function clickPathChangeCheckBox(event, index) {
+  const timer = checkBoxTimer[index]
+  if (timer) {
+    clearTimeout(timer);
+    delete checkBoxTimer[index];
+  }
+  checkBoxTimer[index] = setTimeout(() => {
+    const checkbox = document.querySelector(`input[name="select[]"][value="${index}"]`);
+    const value = checkbox.checked;
+
+    if (!!!event.shiftKey) {
+      const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
+      selectAllCheckbox.checked = false;
+      const checkboxes = document.querySelectorAll('input[name="select[]"]');
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+      });
+    }
+
+    checkbox.checked = !value;
+    toggleCheckBox();
+  }, 150);
 }
 
 function setupDropzone() {
@@ -733,19 +885,18 @@ async function setupEditorPage() {
  * @returns
  */
 async function deletePath(index) {
-    const file = DATA.paths[index];
-    if (!file) return;
-    await doDeletePath(file.name, newUrl(file.name), () => {
-        $deleteButton = document.getElementById("delete-btn");
-        document.getElementById(`addPath${index}`)?.remove();
-        DATA.paths[index] = null;
-        if (!DATA.paths.find(v => !!v)) {
-            $pathsTable.classList.add("hidden");
-            $deleteButton.classList.add("hidden");
-            $emptyFolder.textContent = dirEmptyNote;
-            $emptyFolder.classList.remove("hidden");
-        }
-    })
+  cleanContextMenu();
+  const file = DATA.paths[index];
+  if (!file) return;
+  await doDeletePath(file.name, newUrl(file.name), () => {
+    document.getElementById(`addPath${index}`)?.remove();
+    DATA.paths[index] = null;
+    if (!DATA.paths.find(v => !!v)) {
+      $pathsTable.classList.add("hidden");
+      $emptyFolder.textContent = dirEmptyNote;
+      $emptyFolder.classList.remove("hidden");
+    }
+  })
 }
 
 /**
@@ -753,38 +904,61 @@ async function deletePath(index) {
  * @param {[]} selectedItems
  * @returns
  */
-async function deleteBatchPaths(selectedItems) {
-    if (selectedItems.length === 0) return;
-    if (!confirm(`是否删除选中的文件 ?`)) return;
-    document.getElementById("delete-btn").classList.add("hidden");
-    for (const index of selectedItems) {
-      const file = DATA.paths[index];
-      if (!file) continue;
-      await doDeletePathWithoutComfirm(newUrl(file.name), () => {
-        $deleteButton = document.getElementById("delete-btn");
-        document.getElementById(`addPath${index}`)?.remove();
-        DATA.paths[index] = null;
-        if (!DATA.paths.find(v => !!v)) {
-          $pathsTable.classList.add("hidden");
-          $deleteButton.classList.add("hidden");
-          $emptyFolder.textContent = dirEmptyNote;
-          $emptyFolder.classList.remove("hidden");
-        }
-      })
+async function deleteBatchPaths(items) {
+  if (items.length === 0) return;
+  if (!confirm(`是否删除选中的文件 ?`)) return;
+  for (const index of items) {
+    const file = DATA.paths[index];
+    if (!file) continue;
+    await doDeletePathWithoutComfirm(newUrl(file.name), () => {
+      document.getElementById(`addPath${index}`)?.remove();
+      DATA.paths[index] = null;
+      if (!DATA.paths.find(v => !!v)) {
+        $pathsTable.classList.add("hidden");
+        $emptyFolder.textContent = dirEmptyNote;
+        $emptyFolder.classList.remove("hidden");
+      }
+    })
   }
 }
 
-async function doDeletePathWithoutComfirm(url, callback) {
-    try {
-        await checkAuth();
-        const res = await fetch(url, {
-            method: "DELETE",
-        });
-        await assertResOK(res);
-        callback();
-    } catch (err) {
-        alert(`删除文件失败, ${err.message}`);
+async function moveBatchPaths(items) {
+  const buttons = {
+    "确认": async function () {
+      let newFileUrl = ""
+      for (const index of items) {
+        mylog("dialog 确认", index, selectedPath);
+        $(this).dialog("close");
+        newFileUrl = await doMovePathByFileTree(index)
+      }
+      location.href = newFileUrl.split("/").slice(0, -1).join("/");
+    },
+    "取消": function () {
+      mylog("dialog 取消");
+      $(this).dialog("close");
     }
+  }
+  $('#treeDialog').dialog('option', 'buttons', buttons)
+  $('#treeDialog').dialog('open')
+  listPath("").then(data => {
+    mylog("data", data)
+    const nodes = pathDataToNodes(data, true)
+    mylog("nodes", nodes)
+    $('#tree').tree("loadData", nodes);
+  })
+}
+
+async function doDeletePathWithoutComfirm(url, callback) {
+  try {
+    await checkAuth();
+    const res = await fetch(url, {
+      method: "DELETE",
+    });
+    await assertResOK(res);
+    callback();
+  } catch (err) {
+    alert(`删除文件失败, ${err.message}`);
+  }
 }
 
 async function doDeletePath(name, url, cb) {
@@ -802,11 +976,144 @@ async function doDeletePath(name, url, cb) {
 }
 
 /**
+ * 
+ * @param {string} path 
+ * @returns DATA
+ */
+async function listPath(path) {
+  const url = baseUrl().replace(DATA.href, path)
+  mylog("list path url", url)
+  try {
+    const res = await fetch(url + "?json");
+    await assertResOK(res);
+    return await res.json();
+  } catch {
+    alert(`无法获取文件夹内容 ${path}, ${err.message}`);
+    return {
+      paths: [],
+    };
+  }
+}
+
+async function renamePath(index) {
+  cleanContextMenu();
+  const file = DATA.paths[index];
+  if (!file) return;
+  const newFileUrl = await doRenamePath(file.name);
+  if (newFileUrl) {
+    location.href = newFileUrl.split("/").slice(0, -1).join("/");
+  }
+}
+
+function movePathByFileTree(index) {
+  const buttons = {
+    "确认": async function () {
+      mylog("dialog 确认", index, selectedPath);
+      $(this).dialog("close");
+      const newFileUrl = await doMovePathByFileTree(index)
+      if (newFileUrl) {
+        location.href = newFileUrl.split("/").slice(0, -1).join("/");
+      }
+    },
+    "取消": function () {
+      mylog("dialog 取消");
+      $(this).dialog("close");
+    }
+  }
+  $('#treeDialog').dialog('option', 'buttons', buttons)
+  $('#treeDialog').dialog('open')
+  listPath("").then(data => {
+    mylog("data", data)
+    const nodes = pathDataToNodes(data, true)
+    mylog("nodes", nodes)
+    $('#tree').tree("loadData", nodes);
+  })
+}
+
+async function copyFile(index) {
+  const file = DATA.paths[index];
+  const name = file.name
+  let newName = prompt("拷贝副本文件名", name)
+  if (!newName) return;
+  if (newName === name) return;
+  if (newName.includes("/")) {
+    alert(`文件名不能带有/`);
+    return;
+  }
+  let fileUrl = newUrl(name)
+  let newFileUrl = newUrl(newName);
+  try {
+    await checkAuth();
+    const res1 = await fetch(newFileUrl, {
+      method: "HEAD",
+    });
+    if (res1.status === 200) {
+      if (!confirm(`文件 ${newName} 已存在，是否覆盖？`)) {
+        return;
+      }
+    }
+    const res2 = await fetch(fileUrl, {
+      method: "COPY",
+      headers: {
+        "Destination": newFileUrl,
+      }
+    });
+    await assertResOK(res2);
+    window.location.reload();
+  } catch (err) {
+    alert(`无法拷贝, ${err.message}`);
+  }
+}
+
+async function doMovePathByFileTree(index) {
+  const file = DATA.paths[index];
+  const url = newUrl(file.name)
+  let newFileUrl = baseUrl().replace(DATA.href, "")
+  if (newFileUrl.endsWith("/")) {
+    newFileUrl = newFileUrl.slice(0, -1)
+  }
+  let path = selectedPath
+  if (!path.startsWith("/")) {
+    path = `/${path}`
+  }
+
+  newFileUrl = `${newFileUrl}${path}`
+  if (newFileUrl.endsWith("/")) {
+    newFileUrl += file.name
+  } else {
+    newFileUrl += `/${file.name}`
+  }
+  mylog("fileurl", url, "new file url", newFileUrl)
+  try {
+    await checkAuth();
+    const res1 = await fetch(newFileUrl, {
+      method: "HEAD",
+    });
+    if (res1.status === 200) {
+      if (!confirm("是否覆盖？")) {
+        return;
+      }
+    }
+    const res2 = await fetch(url, {
+      method: "MOVE",
+      headers: {
+        "Destination": newFileUrl,
+      }
+    });
+    await assertResOK(res2);
+    return newFileUrl;
+  } catch (err) {
+    alert(`无法移动 \`${filePath}\` 到 \`${newPath}\`, ${err.message}`);
+  }
+}
+
+/**
  * Move path
  * @param {number} index
  * @returns
  */
 async function movePath(index) {
+  cleanContextMenu();
   const file = DATA.paths[index];
   if (!file) return;
   const fileUrl = newUrl(file.name);
@@ -833,6 +1140,45 @@ function urlToRootPath(fileUrl) {
   pathSegments[1] = ROOT;
   const filePath = decodeURIComponent(pathSegments.join('/'));
   return [filePath, firstSegment]
+}
+
+/**
+ * 
+ * @param {string, filename} name 
+ * @returns 
+ */
+async function doRenamePath(name) {
+  let newName = prompt("新文件名", name)
+  if (!newName) return;
+  if (newName === name) return;
+  if (newName.includes("/")) {
+    alert(`文件名不能带有/`);
+    return;
+  }
+
+  const fileUrl = newUrl(name);
+  const newFileUrl = newUrl(newName);
+  try {
+    await checkAuth();
+    const res1 = await fetch(newFileUrl, {
+      method: "HEAD",
+    });
+    if (res1.status === 200) {
+      if (!confirm("是否覆盖？")) {
+        return;
+      }
+    }
+    const res2 = await fetch(fileUrl, {
+      method: "MOVE",
+      headers: {
+        "Destination": newFileUrl,
+      }
+    });
+    await assertResOK(res2);
+    return newFileUrl;
+  } catch (err) {
+    alert(`无法将 ${name} 重命名为 ${newName}, ${err.message}`);
+  }
 }
 
 const ROOT = "root";
@@ -1049,12 +1395,88 @@ async function assertResOK(res) {
 }
 
 function getEncoding(contentType) {
-    const charset = contentType?.split(";")[1];
-    if (/charset/i.test(charset)) {
-      let encoding = charset.split("=")[1];
-      if (encoding) {
-        return encoding.toLowerCase()
-      }
+  const charset = contentType?.split(";")[1];
+  if (/charset/i.test(charset)) {
+    let encoding = charset.split("=")[1];
+    if (encoding) {
+      return encoding.toLowerCase()
     }
-    return 'utf-8'
+  }
+  return 'utf-8'
+}
+
+/**
+ * 
+ * @param {DATA} data 
+ * @param {boolean} dirOnly
+ */
+function pathDataToNodes(data, dirOnly) {
+  const prefix = data.href
+  if (data.paths.length === 0) {
+    return []
+  }
+  let paths = data.paths
+  if (dirOnly) {
+    paths = paths.filter(path => path.path_type.endsWith("Dir"))
+  }
+  const nodes = paths.map(path => {
+    const name = path.name
+    let url = prefix
+    if (url.endsWith("/")) {
+      url += name
+    } else {
+      url += "/" + name
+    }
+    const isDir = path.path_type.endsWith("Dir")
+    return {
+      label: name,
+      id: url,
+      isDir: isDir,
+    }
+  })
+  return nodes
+}
+
+let selectedPath = ""
+function initFileTree() {
+  $('#treeDialog').dialog({
+    autoOpen: false,
+    width: 400,
+    modal: true,
+    position: {
+      my: "center top",
+      at: "center top+10%",
+      of: window
+    },
+  })
+
+  $('#tree').tree({
+    data: [],
+    autoOpen: true, // Automatically open all nodes when the tree is displayed
+  });
+  $("#tree").bind("tree.click", function (event) {
+    const node = event.node;
+    selectedPath = node.id;
+    document.getElementById("selectedPath").textContent = `已选择路径：${selectedPath}`
+    if (node.children && node.children.length > 0) {
+      if (node.is_open) {
+        $('#tree').tree('closeNode', node);
+      } else {
+        $('#tree').tree('openNode', node);
+      }
+      return;
+    }
+    mylog("node", node)
+    listPath(node.id).then(data => {
+      const newNodes = pathDataToNodes(data, true)
+      let updateNode = {
+        label: node.label,
+        id: node.id,
+        isDir: node.isDir,
+        children: newNodes,
+      }
+      $('#tree').tree('updateNode', node, updateNode);
+      $('#tree').tree('openNode', node);
+    })
+  });
 }
