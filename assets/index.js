@@ -325,9 +325,9 @@ function addBreadcrumb(href, uri_prefix) {
 }
 
 function setupIndexPage() {
-  const $hints = document.querySelector("#operationHints")
-  $hints.textContent = "单击选中，双击打开，shift + 单击多选，ESC 取消，右键菜单";
-  $hints.classList.remove("hidden");
+  const hints = document.querySelector("#operationHints")
+  hints.textContent = "单击选中，双击打开，shift + 单击范围选，ctrl/cmd + 单击多选，ESC 取消，右键菜单";
+  hints.classList.remove("hidden");
 
   if (DATA.allow_archive) {
     const $download = document.querySelector(".download");
@@ -420,18 +420,18 @@ function toggleSelectAll(selectAllCheckbox) {
 }
 
 function deleteSelectedItems() {
-  const items = [...selectedItems]
-  selectedItems.splice(0, selectedItems.length);
-  updateBatchButtonVisibility();
-  deleteBatchPaths(items);
+  // const items = [...selectedItems]
+  // selectedItems.splice(0, selectedItems.length);
+  // updateBatchButtonVisibility();
+  deleteBatchPaths(selectedItems);
 }
 
 function moveSelectedItems() {
   mylog("moveSelectedItems", selectedItems)
-  const items = [...selectedItems]
-  selectedItems.splice(0, selectedItems.length);
-  updateBatchButtonVisibility();
-  moveBatchPaths(items);
+  // const items = [...selectedItems]
+  // selectedItems.splice(0, selectedItems.length);
+  // updateBatchButtonVisibility();
+  moveBatchPaths(selectedItems);
 }
 
 /**
@@ -574,7 +574,7 @@ function addPath(file, index) {
     ondblclick="dblclickPathOpenURL(event, '${index}', '${url}', ${isDir})"
     oncontextmenu="openContextMenu(event, ${index})" 
   >
-    <a >${encodedName}</a>
+  ${isDir ? `<a style="text-decoration: none;">${encodedName}</a>` : encodedName}
   </td>
   <td class="cell-mtime nonselect" 
     onclick="clickPathChangeCheckBox(event, ${index})"
@@ -696,6 +696,17 @@ function dblclickPathOpenURL(event, index, url, isDir) {
   }
 }
 
+function cleanCheckBoxAndSelectedItems() {
+  const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
+  const checkboxes = document.querySelectorAll('input[name="select[]"]');
+  selectAllCheckbox.checked = false;
+  checkboxes.forEach(checkbox => {
+    checkbox.checked = false;
+  });
+  selectedItems.splice(0, selectedItems.length);
+  updateBatchButtonVisibility();
+}
+
 /**
  * 
  * @param {onclick event} event 
@@ -709,15 +720,27 @@ function clickPathChangeCheckBox(event, index) {
   }
   checkBoxTimer[index] = setTimeout(() => {
     const checkbox = document.querySelector(`input[name="select[]"][value="${index}"]`);
-    const value = checkbox.checked;
+    let value = checkbox.checked;
 
-    if (!!!event.shiftKey) {
-      const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
+    const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
+    const checkboxes = document.querySelectorAll('input[name="select[]"]');
+
+    if (!!!event.ctrlKey && !!!event.shiftKey && !!!event.metaKey) {
+      // single click without ctrl, shift, cmd(mac), only choose one
       selectAllCheckbox.checked = false;
-      const checkboxes = document.querySelectorAll('input[name="select[]"]');
       checkboxes.forEach(checkbox => {
         checkbox.checked = false;
       });
+
+    } else if (event.shiftKey) {
+      // shift + click, choose all between last checked and current checked
+      selectedItems.push(index)
+      const minVal = Math.min(...selectedItems);
+      const maxVal = Math.max(...selectedItems);
+      for (let i = minVal; i < maxVal; i++) {
+        checkboxes[i].checked = true;
+      }
+      value = false;
     }
 
     checkbox.checked = !value;
@@ -920,11 +943,16 @@ async function deleteBatchPaths(items) {
       }
     })
   }
+  cleanCheckBoxAndSelectedItems();
 }
 
 async function moveBatchPaths(items) {
   const buttons = {
     "确认": async function () {
+      if (selectedPath === notChoosePath) {
+        alert("请选择目标路径");
+        return;
+      }
       let newFileUrl = ""
       for (const index of items) {
         mylog("dialog 确认", index, selectedPath);
@@ -932,6 +960,7 @@ async function moveBatchPaths(items) {
         newFileUrl = await doMovePathByFileTree(index)
       }
       location.href = newFileUrl.split("/").slice(0, -1).join("/");
+      cleanCheckBoxAndSelectedItems();
     },
     "取消": function () {
       mylog("dialog 取消");
@@ -940,7 +969,7 @@ async function moveBatchPaths(items) {
   }
   $('#treeDialog').dialog('option', 'buttons', buttons)
   $('#treeDialog').dialog('open')
-  listPath("").then(data => {
+  listPath(getDefaultPathPrefix()).then(data => {
     mylog("data", data)
     const nodes = pathDataToNodes(data, true)
     mylog("nodes", nodes)
@@ -981,8 +1010,8 @@ async function doDeletePath(name, url, cb) {
  * @returns DATA
  */
 async function listPath(path) {
-  const url = baseUrl().replace(DATA.href, path)
-  mylog("list path url", url)
+  let url = baseUrl().replace(DATA.href, path.split("/").map(encodeURIComponent).join("/"))
+  mylog("list path url path", url, path)
   try {
     const res = await fetch(url + "?json");
     await assertResOK(res);
@@ -1008,6 +1037,10 @@ async function renamePath(index) {
 function movePathByFileTree(index) {
   const buttons = {
     "确认": async function () {
+      if (selectedPath === notChoosePath) {
+        alert("请选择目标路径");
+        return;
+      }
       mylog("dialog 确认", index, selectedPath);
       $(this).dialog("close");
       const newFileUrl = await doMovePathByFileTree(index)
@@ -1022,12 +1055,22 @@ function movePathByFileTree(index) {
   }
   $('#treeDialog').dialog('option', 'buttons', buttons)
   $('#treeDialog').dialog('open')
-  listPath("").then(data => {
+  listPath(getDefaultPathPrefix()).then(data => {
     mylog("data", data)
     const nodes = pathDataToNodes(data, true)
     mylog("nodes", nodes)
     $('#tree').tree("loadData", nodes);
   })
+}
+
+// megaease cloud file server, first part of href is the storage id
+function getDefaultPathPrefix() {
+  let parts = DATA.href.split('/');
+  if (parts.length > 1) {
+    return '/' + parts[1];
+  } else {
+    return '';
+  }
 }
 
 async function copyFile(index) {
@@ -1429,13 +1472,22 @@ function pathDataToNodes(data, dirOnly) {
     }
     const isDir = path.path_type.endsWith("Dir")
     return {
-      label: name,
+      name: name,
       id: url,
-      isDir: isDir,
+      // isDir: isDir,
+      children: isDir ? [
+        {
+          name: treeLoading,
+        }
+      ] : null,
     }
   })
   return nodes
 }
+
+const treeLoading = "loading...";
+const treeNoChildren = "没有子目录";
+const notChoosePath = "没有选择路径";
 
 let selectedPath = ""
 function initFileTree() {
@@ -1450,15 +1502,23 @@ function initFileTree() {
     },
   })
 
+  let iconOpen = document.createElement("i");
+  iconOpen.classList.add("fas", "fa-folder-open")
+  let iconClose = document.createElement("i");
+  iconClose.classList.add("fas", "fa-folder")
+
   $('#tree').tree({
     data: [],
-    autoOpen: true, // Automatically open all nodes when the tree is displayed
+    autoOpen: false, // Automatically open all nodes when the tree is displayed
+    openedIcon: iconOpen,
+    closedIcon: iconClose,
   });
   $("#tree").bind("tree.click", function (event) {
     const node = event.node;
-    selectedPath = node.id;
+    selectedPath = node.id || notChoosePath;
     document.getElementById("selectedPath").textContent = `已选择路径：${selectedPath}`
-    if (node.children && node.children.length > 0) {
+    // by source code, single node children is use name as label
+    if (node.children && node.children.length > 0 && !hasLoadingChildren(node)) {
       if (node.is_open) {
         $('#tree').tree('closeNode', node);
       } else {
@@ -1466,11 +1526,25 @@ function initFileTree() {
       }
       return;
     }
-    mylog("node", node)
+    if (node.name === treeNoChildren) {
+      if (node.is_open) {
+        $('#tree').tree('closeNode', node);
+      } else {
+        $('#tree').tree('openNode', node);
+      }
+      return;
+    }
+    mylog("tree click node", node)
     listPath(node.id).then(data => {
-      const newNodes = pathDataToNodes(data, true)
+      let newNodes = pathDataToNodes(data, true)
+      if (newNodes.length === 0) {
+        newNodes = [{
+          name: treeNoChildren,
+          // id: node.id,
+        }]
+      }
       let updateNode = {
-        label: node.label,
+        name: node.name,
         id: node.id,
         isDir: node.isDir,
         children: newNodes,
@@ -1479,4 +1553,23 @@ function initFileTree() {
       $('#tree').tree('openNode', node);
     })
   });
+}
+
+/**
+ * the code may use name or label as key
+ * @param {jqtree child node} node 
+ * @returns 
+ */
+function hasLoadingChildren(node) {
+  if (node.children && node.children.length > 0) {
+    const child = node.children[0]
+    if (child.label && child.label === treeLoading) {
+      return true
+    } else if (child.name && child.name === treeLoading) {
+      return true
+    }
+    return false
+  } else {
+    return false
+  }
 }
