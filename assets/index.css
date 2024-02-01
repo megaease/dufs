@@ -5,12 +5,15 @@ html {
 }
 
 body {
-    /* prevent premature breadcrumb wrapping on mobile */
     min-width: 500px;
     margin: 0;
 }
 
 .hidden {
+    display: none !important;
+}
+
+.must-hidden {
     display: none !important;
 }
 
@@ -173,8 +176,8 @@ body {
     padding-left: 2px;
 }
 
-.paths-table tbody tr:not(.selected):hover {
-    background-color: #fafafa;
+.paths-table tbody tr:hover {
+    background-color: transparent;
 }
 
 .paths-table .cell-actions {
