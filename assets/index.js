@@ -325,9 +325,9 @@ function addBreadcrumb(href, uri_prefix) {
 }
 
 function setupIndexPage() {
-  const $hints = document.querySelector("#operationHints")
-  $hints.textContent = "单击选中，双击打开，shift + 单击多选，ESC 取消，右键菜单";
-  $hints.classList.remove("hidden");
+  const hints = document.querySelector("#operationHints")
+  hints.textContent = "单击选中，双击打开，shift + 单击范围选，ctrl/cmd + 单击多选，ESC 取消，右键菜单";
+  hints.classList.remove("hidden");
 
   if (DATA.allow_archive) {
     const $download = document.querySelector(".download");
@@ -574,7 +574,7 @@ function addPath(file, index) {
     ondblclick="dblclickPathOpenURL(event, '${index}', '${url}', ${isDir})"
     oncontextmenu="openContextMenu(event, ${index})" 
   >
-    <a >${encodedName}</a>
+  ${isDir ? `<a style="text-decoration: none;">${encodedName}</a>` : encodedName}
   </td>
   <td class="cell-mtime nonselect" 
     onclick="clickPathChangeCheckBox(event, ${index})"
@@ -709,15 +709,27 @@ function clickPathChangeCheckBox(event, index) {
   }
   checkBoxTimer[index] = setTimeout(() => {
     const checkbox = document.querySelector(`input[name="select[]"][value="${index}"]`);
-    const value = checkbox.checked;
+    let value = checkbox.checked;
 
-    if (!!!event.shiftKey) {
-      const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
+    const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
+    const checkboxes = document.querySelectorAll('input[name="select[]"]');
+
+    if (!!!event.ctrlKey && !!!event.shiftKey && !!!event.metaKey) {
+      // single click without ctrl, shift, cmd(mac), only choose one
       selectAllCheckbox.checked = false;
-      const checkboxes = document.querySelectorAll('input[name="select[]"]');
       checkboxes.forEach(checkbox => {
         checkbox.checked = false;
       });
+
+    } else if (event.shiftKey) {
+      // shift + click, choose all between last checked and current checked
+      selectedItems.push(index)
+      const minVal = Math.min(...selectedItems);
+      const maxVal = Math.max(...selectedItems);
+      for (let i = minVal; i < maxVal; i++) {
+        checkboxes[i].checked = true;
+      }
+      value = false;
     }
 
     checkbox.checked = !value;
