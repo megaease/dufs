@@ -588,7 +588,7 @@ function addPath(file, index) {
     ondblclick="dblclickPathOpenURL(event, '${index}', '${url}', ${isDir})"
     oncontextmenu="openContextMenu(event, ${index})" 
   >
-    ${formatSize(file.size).join(" ")}
+    ${isDir ? "- B" : formatSize(file.size).join(" ")}
   </td>
 </tr>`)
 }
@@ -608,6 +608,7 @@ function openContextMenu(e, index) {
   let actionEdit = "";
   let actionView = "";
   let actionCopyFile = "";
+  let actionDirSize = "";
   let actionCopyPath = `<li class="contextMenuItem" onclick="copyPath(${index})" title="复制路径" target="_blank">复制路径</li>`
   if (isDir) {
     url += "/";
@@ -635,12 +636,16 @@ function openContextMenu(e, index) {
     actionDelete = `
     <li class="contextMenuItem" onclick="deletePath(${index})" id="deleteBtn${index}" title="删除">删除</li>`;
   }
+  if (isDir) {
+    actionDirSize = `<li class="contextMenuItem" onclick="calculateDirSize(${index})" id="dirSizeBtn${index}" title="统计文件大小">统计文件大小</li>`;
+  }
   if (!actionEdit && !isDir) {
     actionView = `<li class="contextMenuItem"><a class="menu-href" title="查看" target="_blank" href="${url}?view">${ICONS.view}</a></li>`;
   }
   let actions = `
   <ul>
     ${actionOpen}
+    ${actionDirSize}
     ${actionDownload}
     ${actionView}
     ${actionRename}
@@ -944,6 +949,19 @@ async function deleteBatchPaths(items) {
     })
   }
   cleanCheckBoxAndSelectedItems();
+}
+
+async function calculateDirSize(index) {
+  const file = DATA.paths[index];
+  const url = newUrl(file.name)
+  try {
+    const res = await fetch(url + "?statistic");
+    await assertResOK(res);
+    const data = await res.json();
+    alert(`文件夹 ${file.name} 大小: ${formatSize(data.size).join(" ")}`);
+  } catch (err) {
+    alert(`无法获取文件夹内容 ${file.name}, ${err.message}`);
+  }
 }
 
 async function moveBatchPaths(items) {
