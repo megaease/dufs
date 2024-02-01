@@ -1444,10 +1444,18 @@ function pathDataToNodes(data, dirOnly) {
       label: name,
       id: url,
       isDir: isDir,
+      children: isDir ? [
+        {
+          label: treeLoading,
+        }
+      ] : null,
     }
   })
   return nodes
 }
+
+const treeLoading = "loading...";
+const treeNoChildren = "没有子目录";
 
 let selectedPath = ""
 function initFileTree() {
@@ -1462,15 +1470,23 @@ function initFileTree() {
     },
   })
 
+  let iconOpen = document.createElement("span");
+  iconOpen.classList.add("fas", "fa-folder-open")
+  let iconClose = document.createElement("span");
+  iconClose.classList.add("fas", "fa-folder")
+
   $('#tree').tree({
     data: [],
-    autoOpen: true, // Automatically open all nodes when the tree is displayed
+    autoOpen: false, // Automatically open all nodes when the tree is displayed
+    openedIcon: iconOpen,
+    closedIcon: iconClose,
   });
   $("#tree").bind("tree.click", function (event) {
     const node = event.node;
     selectedPath = node.id;
     document.getElementById("selectedPath").textContent = `已选择路径：${selectedPath}`
-    if (node.children && node.children.length > 0) {
+    // by source code, single node children is use name as label
+    if (node.children && node.children.length > 0 && !hasLoadingChildren(node)) {
       if (node.is_open) {
         $('#tree').tree('closeNode', node);
       } else {
@@ -1478,11 +1494,20 @@ function initFileTree() {
       }
       return;
     }
-    mylog("node", node)
+    if (node.label === treeNoChildren || node.name === treeNoChildren) {
+      return;
+    }
+    mylog("tree click node", node)
     listPath(node.id).then(data => {
-      const newNodes = pathDataToNodes(data, true)
+      let newNodes = pathDataToNodes(data, true)
+      if (newNodes.length === 0) {
+        newNodes = [{
+          label: treeNoChildren,
+          id: node.id,
+        }]
+      }
       let updateNode = {
-        label: node.label,
+        label: node.label || node.name,
         id: node.id,
         isDir: node.isDir,
         children: newNodes,
@@ -1491,4 +1516,23 @@ function initFileTree() {
       $('#tree').tree('openNode', node);
     })
   });
+}
+
+/**
+ * the code may use name or label as key
+ * @param {jqtree child node} node 
+ * @returns 
+ */
+function hasLoadingChildren(node) {
+  if (node.children && node.children.length > 0) {
+    const child = node.children[0]
+    if (child.label && child.label === treeLoading) {
+      return true
+    } else if (child.name && child.name === treeLoading) {
+      return true
+    }
+    return false
+  } else {
+    return false
+  }
 }
