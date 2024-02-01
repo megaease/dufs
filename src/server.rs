@@ -284,6 +284,9 @@ impl Server {
                             &mut res,
                         )
                         .await?;
+                    } else if query_params.contains_key("statistic") {
+                        self.handle_statistic_dir(path, &mut res)
+                            .await?;
                     } else {
                         self.handle_ls_dir(
                             path,
@@ -532,6 +535,44 @@ impl Server {
             access_paths,
             res,
         )
+    }
+
+    // Calculate the size of all files in a directory. like: du -sh .*
+    async fn handle_statistic_dir(
+        &self,
+        path: &Path,
+        res: &mut Response,
+    ) -> Result<()> {
+        let path_buf = path.to_path_buf();
+        let mut size: u64 = 0;
+        let mut count: u64 = 0;
+        let running = self.running.clone();
+        let access_paths = AccessPaths::new(AccessPerm::ReadOnly);
+        let (size, count) = tokio::task::spawn_blocking(move || {
+            for dir in access_paths.child_paths(&path_buf) {
+                let mut it = WalkDir::new(&dir).into_iter();
+                it.next();
+                while let Some(Ok(entry)) = it.next() {
+                    if !running.load(atomic::Ordering::SeqCst) {
+                        break;
+                    }
+                    count += 1;
+                    size += entry.metadata().unwrap().len();
+                }
+            }
+            (size, count)
+        })
+        .await?;
+        let output = format!(
+            r#"{{"size":{},"count":{}}}"#,
+            size, count
+        );
+        res.headers_mut()
+            .typed_insert(ContentType::from(mime_guess::mime::APPLICATION_JSON));
+        res.headers_mut()
+            .typed_insert(ContentLength(output.as_bytes().len() as u64));
+        *res.body_mut() = body_full(output);
+        Ok(())
     }
 
     async fn handle_search_dir(

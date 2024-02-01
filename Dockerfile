@@ -2,12 +2,12 @@ FROM rust:1.72.1 as builder
 
 WORKDIR /dufs
 RUN apt update && apt install musl-tools -y
+RUN rustup target add x86_64-unknown-linux-musl
 
 COPY assets /dufs/assets
 COPY src /dufs/src
 COPY Cargo.toml /dufs/Cargo.toml
 
-RUN rustup target add x86_64-unknown-linux-musl
 RUN cargo build --release --target=x86_64-unknown-linux-musl
 
 FROM scratch
