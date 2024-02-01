@@ -420,17 +420,11 @@ function toggleSelectAll(selectAllCheckbox) {
 }
 
 function deleteSelectedItems() {
-  // const items = [...selectedItems]
-  // selectedItems.splice(0, selectedItems.length);
-  // updateBatchButtonVisibility();
   deleteBatchPaths(selectedItems);
 }
 
 function moveSelectedItems() {
   mylog("moveSelectedItems", selectedItems)
-  // const items = [...selectedItems]
-  // selectedItems.splice(0, selectedItems.length);
-  // updateBatchButtonVisibility();
   moveBatchPaths(selectedItems);
 }
 
@@ -1028,8 +1022,8 @@ async function doDeletePath(name, url, cb) {
  * @returns DATA
  */
 async function listPath(path) {
-  let url = baseUrl().replace(DATA.href, path.split("/").map(encodeURIComponent).join("/"))
-  mylog("list path url path", url, path)
+  let url = baseUrl().replace(getEncodingHref(), path.split("/").map(encodeURIComponent).join("/"))
+  mylog(`base ${baseUrl()}, href ${DATA.href}, path ${path}, url ${url}`)
   try {
     const res = await fetch(url + "?json");
     await assertResOK(res);
@@ -1126,10 +1120,14 @@ async function copyFile(index) {
   }
 }
 
+function getEncodingHref() {
+  return DATA.href.split("/").map(encodeURIComponent).join("/")
+}
+
 async function doMovePathByFileTree(index) {
   const file = DATA.paths[index];
   const url = newUrl(file.name)
-  let newFileUrl = baseUrl().replace(DATA.href, "")
+  let newFileUrl = baseUrl().replace(getEncodingHref(), "")
   if (newFileUrl.endsWith("/")) {
     newFileUrl = newFileUrl.slice(0, -1)
   }
@@ -1138,11 +1136,11 @@ async function doMovePathByFileTree(index) {
     path = `/${path}`
   }
 
-  newFileUrl = `${newFileUrl}${path}`
+  newFileUrl = `${newFileUrl}${path.split("/").map(encodeURIComponent).join("/")}`
   if (newFileUrl.endsWith("/")) {
-    newFileUrl += file.name
+    newFileUrl += encodeURIComponent(file.name)
   } else {
-    newFileUrl += `/${file.name}`
+    newFileUrl += `/${encodeURIComponent(file.name)}`
   }
   mylog("fileurl", url, "new file url", newFileUrl)
   try {
@@ -1164,7 +1162,7 @@ async function doMovePathByFileTree(index) {
     await assertResOK(res2);
     return newFileUrl;
   } catch (err) {
-    alert(`无法移动 \`${filePath}\` 到 \`${newPath}\`, ${err.message}`);
+    alert(`无法移动 \`${file.name}\` 到 \`${path}\`, ${err.message}`);
   }
 }
 
