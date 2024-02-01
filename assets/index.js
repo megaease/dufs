@@ -942,6 +942,7 @@ async function deleteBatchPaths(items) {
       }
     })
   }
+  window.location.reload();
   cleanCheckBoxAndSelectedItems();
 }
 
