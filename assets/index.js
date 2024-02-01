@@ -420,18 +420,18 @@ function toggleSelectAll(selectAllCheckbox) {
 }
 
 function deleteSelectedItems() {
-  const items = [...selectedItems]
-  selectedItems.splice(0, selectedItems.length);
-  updateBatchButtonVisibility();
-  deleteBatchPaths(items);
+  // const items = [...selectedItems]
+  // selectedItems.splice(0, selectedItems.length);
+  // updateBatchButtonVisibility();
+  deleteBatchPaths(selectedItems);
 }
 
 function moveSelectedItems() {
   mylog("moveSelectedItems", selectedItems)
-  const items = [...selectedItems]
-  selectedItems.splice(0, selectedItems.length);
-  updateBatchButtonVisibility();
-  moveBatchPaths(items);
+  // const items = [...selectedItems]
+  // selectedItems.splice(0, selectedItems.length);
+  // updateBatchButtonVisibility();
+  moveBatchPaths(selectedItems);
 }
 
 /**
@@ -696,6 +696,17 @@ function dblclickPathOpenURL(event, index, url, isDir) {
   }
 }
 
+function cleanCheckBoxAndSelectedItems() {
+  const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
+  const checkboxes = document.querySelectorAll('input[name="select[]"]');
+  selectAllCheckbox.checked = false;
+  checkboxes.forEach(checkbox => {
+    checkbox.checked = false;
+  });
+  selectedItems.splice(0, selectedItems.length);
+  updateBatchButtonVisibility();
+}
+
 /**
  * 
  * @param {onclick event} event 
@@ -932,11 +943,16 @@ async function deleteBatchPaths(items) {
       }
     })
   }
+  cleanCheckBoxAndSelectedItems();
 }
 
 async function moveBatchPaths(items) {
   const buttons = {
     "确认": async function () {
+      if (selectedPath === notChoosePath) {
+        alert("请选择目标路径");
+        return;
+      }
       let newFileUrl = ""
       for (const index of items) {
         mylog("dialog 确认", index, selectedPath);
@@ -944,6 +960,7 @@ async function moveBatchPaths(items) {
         newFileUrl = await doMovePathByFileTree(index)
       }
       location.href = newFileUrl.split("/").slice(0, -1).join("/");
+      cleanCheckBoxAndSelectedItems();
     },
     "取消": function () {
       mylog("dialog 取消");
@@ -952,7 +969,7 @@ async function moveBatchPaths(items) {
   }
   $('#treeDialog').dialog('option', 'buttons', buttons)
   $('#treeDialog').dialog('open')
-  listPath("").then(data => {
+  listPath(getDefaultPathPrefix()).then(data => {
     mylog("data", data)
     const nodes = pathDataToNodes(data, true)
     mylog("nodes", nodes)
@@ -993,8 +1010,8 @@ async function doDeletePath(name, url, cb) {
  * @returns DATA
  */
 async function listPath(path) {
-  const url = baseUrl().replace(DATA.href, path)
-  mylog("list path url", url)
+  let url = baseUrl().replace(DATA.href, path.split("/").map(encodeURIComponent).join("/"))
+  mylog("list path url path", url, path)
   try {
     const res = await fetch(url + "?json");
     await assertResOK(res);
@@ -1020,6 +1037,10 @@ async function renamePath(index) {
 function movePathByFileTree(index) {
   const buttons = {
     "确认": async function () {
+      if (selectedPath === notChoosePath) {
+        alert("请选择目标路径");
+        return;
+      }
       mylog("dialog 确认", index, selectedPath);
       $(this).dialog("close");
       const newFileUrl = await doMovePathByFileTree(index)
@@ -1034,12 +1055,22 @@ function movePathByFileTree(index) {
   }
   $('#treeDialog').dialog('option', 'buttons', buttons)
   $('#treeDialog').dialog('open')
-  listPath("").then(data => {
+  listPath(getDefaultPathPrefix()).then(data => {
     mylog("data", data)
     const nodes = pathDataToNodes(data, true)
     mylog("nodes", nodes)
     $('#tree').tree("loadData", nodes);
   })
+}
+
+// megaease cloud file server, first part of href is the storage id
+function getDefaultPathPrefix() {
+  let parts = DATA.href.split('/');
+  if (parts.length > 1) {
+    return '/' + parts[1];
+  } else {
+    return '';
+  }
 }
 
 async function copyFile(index) {
@@ -1441,12 +1472,12 @@ function pathDataToNodes(data, dirOnly) {
     }
     const isDir = path.path_type.endsWith("Dir")
     return {
-      label: name,
+      name: name,
       id: url,
-      isDir: isDir,
+      // isDir: isDir,
       children: isDir ? [
         {
-          label: treeLoading,
+          name: treeLoading,
         }
       ] : null,
     }
@@ -1456,6 +1487,7 @@ function pathDataToNodes(data, dirOnly) {
 
 const treeLoading = "loading...";
 const treeNoChildren = "没有子目录";
+const notChoosePath = "没有选择路径";
 
 let selectedPath = ""
 function initFileTree() {
@@ -1470,9 +1502,9 @@ function initFileTree() {
     },
   })
 
-  let iconOpen = document.createElement("span");
+  let iconOpen = document.createElement("i");
   iconOpen.classList.add("fas", "fa-folder-open")
-  let iconClose = document.createElement("span");
+  let iconClose = document.createElement("i");
   iconClose.classList.add("fas", "fa-folder")
 
   $('#tree').tree({
@@ -1483,7 +1515,7 @@ function initFileTree() {
   });
   $("#tree").bind("tree.click", function (event) {
     const node = event.node;
-    selectedPath = node.id;
+    selectedPath = node.id || notChoosePath;
     document.getElementById("selectedPath").textContent = `已选择路径：${selectedPath}`
     // by source code, single node children is use name as label
     if (node.children && node.children.length > 0 && !hasLoadingChildren(node)) {
@@ -1494,7 +1526,12 @@ function initFileTree() {
       }
       return;
     }
-    if (node.label === treeNoChildren || node.name === treeNoChildren) {
+    if (node.name === treeNoChildren) {
+      if (node.is_open) {
+        $('#tree').tree('closeNode', node);
+      } else {
+        $('#tree').tree('openNode', node);
+      }
       return;
     }
     mylog("tree click node", node)
@@ -1502,12 +1539,12 @@ function initFileTree() {
       let newNodes = pathDataToNodes(data, true)
       if (newNodes.length === 0) {
         newNodes = [{
-          label: treeNoChildren,
-          id: node.id,
+          name: treeNoChildren,
+          // id: node.id,
         }]
       }
       let updateNode = {
-        label: node.label || node.name,
+        name: node.name,
         id: node.id,
         isDir: node.isDir,
         children: newNodes,
