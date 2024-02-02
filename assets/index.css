@@ -155,6 +155,7 @@ body {
     font-weight: unset;
     color: #5c5c5c;
     white-space: nowrap;
+    width: 0px;
 }
 
 .uploaders-table td,
@@ -167,8 +168,17 @@ body {
     padding-left: 0.6em;
 }
 
+.cell-icon {
+    width: 0px;
+}
+
 .cell-status span {
     display: inline-block;
+}
+
+.paths-table {
+    padding: 20px;
+    width: 100%;
 }
 
 .paths-table thead a {
@@ -323,7 +333,7 @@ body {
     }
 
     .paths-table tbody tr:hover {
-        background-color: #1a1a1a;
+        /*background-color: #1a1a1a;*/
     }
 
     .editor {
