@@ -351,25 +351,35 @@ function setupIndexPage() {
     setupSearch()
   }
 
-  // setupDeleteButton();
-  const batchBtns = document.getElementById('batch-operation-btn');
-  const removeButton = document.createElement('button');
-  removeButton.classList.add("toolbox-btn-red")
-  removeButton.textContent = '批量删除';
-  removeButton.addEventListener('click', deleteSelectedItems);
-  batchBtns.appendChild(removeButton);
-  // setupMoveButton();
-  const batchMoveBtn = document.createElement('button');
-  batchMoveBtn.classList.add("toolbox-btn")
-  batchMoveBtn.textContent = '批量移动';
-  batchMoveBtn.addEventListener('click', moveSelectedItems);
-  batchBtns.appendChild(batchMoveBtn);
+  initBatchOperationButtons();
 
   renderPathsTableHead();
   renderPathsTableBody();
 
   monitorIndexPageEvents();
   initFileTree();
+}
+
+function initBatchOperationButtons() {
+  const batchBtns = document.getElementById('batch-operation-btn');
+
+  const removeButton = document.createElement('button');
+  removeButton.classList.add("toolbox-btn-red")
+  removeButton.textContent = '批量删除';
+  removeButton.addEventListener('click', deleteSelectedItems);
+  batchBtns.appendChild(removeButton);
+
+  const batchMoveBtn = document.createElement('button');
+  batchMoveBtn.classList.add("toolbox-btn")
+  batchMoveBtn.textContent = '批量移动';
+  batchMoveBtn.addEventListener('click', moveSelectedItems);
+  batchBtns.appendChild(batchMoveBtn);
+
+  const downloadButton = document.createElement('button');
+  downloadButton.classList.add("toolbox-btn")
+  downloadButton.textContent = '批量下载';
+  downloadButton.addEventListener('click', downloadSelectedItems);
+  batchBtns.appendChild(downloadButton);
 }
 
 /**
@@ -421,6 +431,10 @@ function toggleSelectAll(selectAllCheckbox) {
 
 function deleteSelectedItems() {
   deleteBatchPaths(selectedItems);
+}
+
+function downloadSelectedItems() {
+  downloadBatchPaths(selectedItems);
 }
 
 function moveSelectedItems() {
@@ -704,6 +718,7 @@ function cleanCheckBoxAndSelectedItems() {
   });
   selectedItems.splice(0, selectedItems.length);
   updateBatchButtonVisibility();
+  toggleCheckBox();
 }
 
 /**
@@ -919,6 +934,45 @@ async function deletePath(index) {
       $emptyFolder.classList.remove("hidden");
     }
   })
+}
+
+async function downloadBatchPaths(items) {
+  if (items.length === 0) return;
+  let dir = DATA.href;
+  if (dir.startsWith("/")) {
+    dir = dir.slice(1);
+  }
+  const files = items.map(index => DATA.paths[index].name);
+  let url = baseUrl().replace(getEncodingHref(), "");
+  if (url.endsWith("/")) {
+    url += "multiple_download"
+  } else {
+    url += "/multiple_download"
+  }
+
+  try {
+    await fetch(url, {
+      method: "POST",
+      body: JSON.stringify({ dir, files }),
+    }).then(response => {
+      if (!response.ok) {
+        throw new Error(`下载文件失败, ${response.status} ${response.statusText}`);
+      }
+      return response.blob();
+    }).then(blob => {
+      console.log(blob)
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      cleanCheckBoxAndSelectedItems();
+
+    });
+  } catch (err) {
+    alert(`下载文件失败, ${err.message}`);
+  }
 }
 
 /**
