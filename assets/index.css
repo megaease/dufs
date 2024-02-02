@@ -146,6 +146,10 @@ body {
 }
 
 .uploaders-table th,
+
+.paths-table {
+    border-spacing: 0px;
+}
 .paths-table th {
     text-align: left;
     font-weight: unset;
