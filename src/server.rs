@@ -182,6 +182,13 @@ impl Server {
             return Ok(res);
         }
 
+        if relative_path.eq("multiple_download") {
+            let dir_path = query_params.get("dir").unwrap().as_str();
+            let file_paths = query_params.get("files").unwrap().as_str();
+            self.handle_multiple_download(dir_path, file_paths, access_paths, &mut res).await?;
+            return Ok(res);
+        }
+
         let head_only = method == Method::HEAD;
 
         if self.args.path_is_file {
@@ -680,6 +687,54 @@ impl Server {
             .await
             {
                 error!("Failed to zip {}, {}", path.display(), e);
+            }
+        });
+        let reader_stream = ReaderStream::new(reader);
+        let stream_body = StreamBody::new(
+            reader_stream
+                .map_ok(Frame::data)
+                .map_err(|err| anyhow!("{err}")),
+        );
+        let boxed_body = stream_body.boxed();
+        *res.body_mut() = boxed_body;
+        Ok(())
+    }
+
+    // download multiple files as a zip file in a directory
+    async fn handle_multiple_download(
+        &self,
+        dir_path: &str,
+        file_paths: &str,
+        access_paths: AccessPaths,
+        res: &mut Response,
+    ) -> Result<()> {
+        let base_path = match self.join_path(dir_path) {
+            Some(v) => v,
+            None => {
+                status_forbid(res);
+                return Ok(());
+            }
+        };
+        let (mut writer, reader) = tokio::io::duplex(BUF_SIZE);
+        let filename = try_get_file_name(&base_path)?;
+        set_content_disposition(res, false, &format!("{}.zip", filename))?;
+        res.headers_mut()
+            .insert("content-type", HeaderValue::from_static("application/zip"));
+        let compression = self.args.compress.to_compression();
+        let running = self.running.clone();
+        let file_paths = file_paths.to_string();
+        tokio::spawn(async move {
+            if let Err(e) = zip_dir_or_file(
+                &mut writer,
+                file_paths.as_str(),
+                &base_path,
+                compression,
+                access_paths,
+                running,
+            )
+            .await
+            {
+                error!("Failed to zip {}, {}", base_path.display(), e);
             }
         });
         let reader_stream = ReaderStream::new(reader);
@@ -1595,6 +1650,70 @@ async fn zip_dir<W: AsyncWrite + Unpin>(
     .await?;
     for zip_path in zip_paths.into_iter() {
         let filename = match zip_path.strip_prefix(dir).ok().and_then(|v| v.to_str()) {
+            Some(v) => v,
+            None => continue,
+        };
+        let (datetime, mode) = get_file_mtime_and_mode(&zip_path).await?;
+        let builder = ZipEntryBuilder::new(filename.into(), compression)
+            .unix_permissions(mode)
+            .last_modification_date(ZipDateTime::from_chrono(&datetime));
+        let mut file = File::open(&zip_path).await?;
+        let mut file_writer = writer.write_entry_stream(builder).await?.compat_write();
+        io::copy(&mut file, &mut file_writer).await?;
+        file_writer.into_inner().close().await?;
+    }
+    writer.close().await?;
+    Ok(())
+}
+
+async fn zip_dir_or_file<W: AsyncWrite + Unpin>(
+    writer: &mut W,
+    files_path: &str,
+    base_path: &Path,
+    compression: Compression,
+    access_paths: AccessPaths,
+    running: Arc<AtomicBool>,
+) -> Result<()> {
+    let mut writer = ZipFileWriter::with_tokio(writer);
+    let base_path_clone = base_path.to_path_buf();
+    let files_path = files_path.to_owned();
+    let zip_paths = tokio::task::spawn_blocking(move || {
+        let mut paths: Vec<PathBuf> = vec![];
+        let files = files_path.split(',').collect::<Vec<&str>>();
+        for file in files {
+            let file_path = base_path_clone.join(file);
+            if !file_path.exists() {
+                continue;
+            }
+            if file_path.is_dir() {
+                for dir in access_paths.child_paths(&file_path) {
+                    let mut it = WalkDir::new(&dir).into_iter();
+                    it.next();
+                    while let Some(Ok(entry)) = it.next() {
+                        if !running.load(atomic::Ordering::SeqCst) {
+                            break;
+                        }
+                        let entry_path = entry.path();
+                        let file_type = entry.file_type();
+                        if entry.path().symlink_metadata().is_err() {
+                            continue;
+                        }
+                        if !file_type.is_file() {
+                            continue;
+                        }
+                        paths.push(entry_path.to_path_buf());
+                    }
+                }
+            } else {
+                paths.push(file_path);
+            }
+        }
+
+        paths
+    }).await?;
+
+    for zip_path in zip_paths.into_iter() {
+        let filename = match zip_path.strip_prefix(base_path).ok().and_then(|v| v.to_str()) {
             Some(v) => v,
             None => continue,
         };
