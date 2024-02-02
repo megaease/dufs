@@ -1530,25 +1530,17 @@ function initFileTree() {
     openedIcon: iconOpen,
     closedIcon: iconClose,
   });
-  $("#tree").bind("tree.click", function (event) {
-    const node = event.node;
+
+  // when open tree node, load children
+  $("#tree").on("tree.open", function (e) {
+    const node = e.node;
+    mylog("tree open node", node);
     selectedPath = node.id || notChoosePath;
-    document.getElementById("selectedPath").textContent = `已选择路径：${selectedPath}`
-    // by source code, single node children is use name as label
+    document.getElementById("selectedPath").textContent = `已选择路径：${selectedPath.replace(getDefaultPathPrefix(), "")}`
     if (node.children && node.children.length > 0 && !hasLoadingChildren(node)) {
-      if (node.is_open) {
-        $('#tree').tree('closeNode', node);
-      } else {
-        $('#tree').tree('openNode', node);
-      }
       return;
     }
     if (node.name === treeNoChildren) {
-      if (node.is_open) {
-        $('#tree').tree('closeNode', node);
-      } else {
-        $('#tree').tree('openNode', node);
-      }
       return;
     }
     mylog("tree click node", node)
@@ -1569,6 +1561,19 @@ function initFileTree() {
       $('#tree').tree('updateNode', node, updateNode);
       $('#tree').tree('openNode', node);
     })
+  });
+
+  // when click tree node, open or close it. 
+  // also set selectedPath.
+  $("#tree").bind("tree.click", function (event) {
+    const node = event.node;
+    selectedPath = node.id || notChoosePath;
+    document.getElementById("selectedPath").textContent = `已选择路径：${selectedPath.replace(getDefaultPathPrefix(), "")}`
+    if (node.is_open) {
+      $('#tree').tree('closeNode', node);
+    } else {
+      $('#tree').tree('openNode', node);
+    }
   });
 }
 

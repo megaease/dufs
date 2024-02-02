@@ -176,7 +176,7 @@ body {
     padding-left: 2px;
 }
 
-.paths-table tbody tr:hover {
+.paths-table tbody tr:not(.selected):hover {
     background-color: transparent;
 }
 
