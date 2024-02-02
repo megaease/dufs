@@ -718,6 +718,7 @@ function cleanCheckBoxAndSelectedItems() {
   });
   selectedItems.splice(0, selectedItems.length);
   updateBatchButtonVisibility();
+  toggleCheckBox();
 }
 
 /**
@@ -948,6 +949,7 @@ async function downloadBatchPaths(items) {
   } else {
     url += "/multiple_download"
   }
+
   try {
     await fetch(url, {
       method: "POST",
@@ -965,8 +967,9 @@ async function downloadBatchPaths(items) {
       document.body.appendChild(a);
       a.click();
       a.remove();
+      cleanCheckBoxAndSelectedItems();
+
     });
-    cleanCheckBoxAndSelectedItems();
   } catch (err) {
     alert(`下载文件失败, ${err.message}`);
   }
