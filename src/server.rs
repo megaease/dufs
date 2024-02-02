@@ -10,7 +10,7 @@ use crate::Args;
 
 use anyhow::{anyhow, Result};
 use async_zip::{tokio::write::ZipFileWriter, Compression, ZipDateTime, ZipEntryBuilder};
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
 use chrono::{LocalResult, TimeZone, Utc};
 use futures_util::{pin_mut, TryStreamExt};
 use headers::{
@@ -28,7 +28,6 @@ use hyper::{
     },
     Method, StatusCode, Uri,
 };
-use serde::Serialize;
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -61,6 +60,14 @@ const INDEX_NAME: &str = "index.html";
 const BUF_SIZE: usize = 65536;
 const EDITABLE_TEXT_MAX_SIZE: u64 = 4194304; // 4M
 const RESUMABLE_UPLOAD_MIN_SIZE: u64 = 20971520; // 20M
+
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MultipleDownload {
+    pub files: Vec<String>,
+    pub dir: String,
+}
 
 pub struct Server {
     args: Args,
@@ -182,10 +189,12 @@ impl Server {
             return Ok(res);
         }
 
-        if relative_path.eq("multiple_download") {
-            let dir_path = query_params.get("dir").unwrap().as_str();
-            let file_paths = query_params.get("files").unwrap().as_str();
-            self.handle_multiple_download(dir_path, file_paths, access_paths, &mut res).await?;
+        if method.as_str() == Method::POST && relative_path.eq("multiple_download") {
+            let body = req.collect().await?.to_bytes();
+            let params: MultipleDownload = serde_json::from_value(serde_json::from_reader(body.reader()).unwrap()).unwrap();
+            let dir_path = params.dir.as_str();
+            let file_paths = params.files;
+            self.handle_multiple_download(dir_path, &file_paths, access_paths, &mut res).await?;
             return Ok(res);
         }
 
@@ -704,7 +713,7 @@ impl Server {
     async fn handle_multiple_download(
         &self,
         dir_path: &str,
-        file_paths: &str,
+        file_paths: &Vec<String>,
         access_paths: AccessPaths,
         res: &mut Response,
     ) -> Result<()> {
@@ -722,11 +731,11 @@ impl Server {
             .insert("content-type", HeaderValue::from_static("application/zip"));
         let compression = self.args.compress.to_compression();
         let running = self.running.clone();
-        let file_paths = file_paths.to_string();
+        let file_paths= file_paths.clone();
         tokio::spawn(async move {
             if let Err(e) = zip_dir_or_file(
                 &mut writer,
-                file_paths.as_str(),
+                &file_paths,
                 &base_path,
                 compression,
                 access_paths,
@@ -1668,7 +1677,7 @@ async fn zip_dir<W: AsyncWrite + Unpin>(
 
 async fn zip_dir_or_file<W: AsyncWrite + Unpin>(
     writer: &mut W,
-    files_path: &str,
+    files_path: &Vec<String>,
     base_path: &Path,
     compression: Compression,
     access_paths: AccessPaths,
@@ -1679,8 +1688,7 @@ async fn zip_dir_or_file<W: AsyncWrite + Unpin>(
     let files_path = files_path.to_owned();
     let zip_paths = tokio::task::spawn_blocking(move || {
         let mut paths: Vec<PathBuf> = vec![];
-        let files = files_path.split(',').collect::<Vec<&str>>();
-        for file in files {
+        for file in files_path {
             let file_path = base_path_clone.join(file);
             if !file_path.exists() {
                 continue;
