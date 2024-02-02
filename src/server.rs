@@ -55,6 +55,7 @@ pub type Response = hyper::Response<BoxBody<Bytes, anyhow::Error>>;
 const INDEX_HTML: &str = include_str!("../assets/index.html");
 const INDEX_CSS: &str = include_str!("../assets/index.css");
 const INDEX_JS: &str = include_str!("../assets/index.js");
+const JQTREE_JS: &str = include_str!("../assets/jqtree.js");
 const FAVICON_ICO: &[u8] = include_bytes!("../assets/favicon.ico");
 const INDEX_NAME: &str = "index.html";
 const BUF_SIZE: usize = 65536;
@@ -89,6 +90,7 @@ impl Server {
             Some(path) => Cow::Owned(std::fs::read_to_string(path.join("index.html"))?),
             None => Cow::Borrowed(INDEX_HTML),
         };
+
         Ok(Self {
             args,
             running,
@@ -285,8 +287,7 @@ impl Server {
                         )
                         .await?;
                     } else if query_params.contains_key("statistic") {
-                        self.handle_statistic_dir(path, &mut res)
-                            .await?;
+                        self.handle_statistic_dir(path, &mut res).await?;
                     } else {
                         self.handle_ls_dir(
                             path,
@@ -538,11 +539,7 @@ impl Server {
     }
 
     // Calculate the size of all files in a directory. like: du -sh .*
-    async fn handle_statistic_dir(
-        &self,
-        path: &Path,
-        res: &mut Response,
-    ) -> Result<()> {
+    async fn handle_statistic_dir(&self, path: &Path, res: &mut Response) -> Result<()> {
         let path_buf = path.to_path_buf();
         let mut size: u64 = 0;
         let mut count: u64 = 0;
@@ -563,10 +560,7 @@ impl Server {
             (size, count)
         })
         .await?;
-        let output = format!(
-            r#"{{"size":{},"count":{}}}"#,
-            size, count
-        );
+        let output = format!(r#"{{"size":{},"count":{}}}"#, size, count);
         res.headers_mut()
             .typed_insert(ContentType::from(mime_guess::mime::APPLICATION_JSON));
         res.headers_mut()
@@ -759,6 +753,13 @@ impl Server {
                 None => match name {
                     "index.js" => {
                         *res.body_mut() = body_full(INDEX_JS);
+                        res.headers_mut().insert(
+                            "content-type",
+                            HeaderValue::from_static("application/javascript; charset=UTF-8"),
+                        );
+                    }
+                    "jqtree.js" => {
+                        *res.body_mut() = body_full(JQTREE_JS);
                         res.headers_mut().insert(
                             "content-type",
                             HeaderValue::from_static("application/javascript; charset=UTF-8"),
@@ -1299,7 +1300,7 @@ impl Server {
     async fn to_pathitem<P: AsRef<Path>>(&self, path: P, base_path: P) -> Result<Option<PathItem>> {
         let path = path.as_ref();
         let (meta,) = tokio::join!(fs::symlink_metadata(&path));
-        let (meta,) = (meta?, );
+        let (meta,) = (meta?,);
         let is_symlink = meta.is_symlink();
         if !self.args.allow_symlink && is_symlink && !self.is_root_contained(path).await {
             return Ok(None);

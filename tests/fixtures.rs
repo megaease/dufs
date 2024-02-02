@@ -128,7 +128,7 @@ where
     I::Item: AsRef<std::ffi::OsStr>,
 {
     let port = port();
-    let tmpdir = tmpdir();
+    let tmpdir: TempDir = tmpdir();
     let child = Command::cargo_bin("dufs")
         .expect("Couldn't find test binary")
         .arg(tmpdir.path())
