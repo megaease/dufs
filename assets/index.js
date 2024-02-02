@@ -587,14 +587,24 @@ function addPath(file, index) {
 </tr>`)
 }
 
+function openURL(url, newTab = false) {
+  cleanContextMenu();
+  if (newTab) {
+    window.open(url);
+  } else {
+    window.location.href = url;
+  }
+}
+
 function openContextMenu(e, index) {
   e.preventDefault()
+  mylog("openContextMenu", index)
 
   const file = DATA.paths[index];
   let url = newUrl(file.name)
   let isDir = file.path_type.endsWith("Dir");
 
-  let actionOpen = `<li class="contextMenuItem"><a class="menu-href" href="${url}" ${isDir ? "" : `target="_blank"`}>打开</a></li>`;
+  let actionOpen = `<li class="contextMenuItem" onclick="openURL('${url}', ${isDir ? true : false})">打开</li>`;
   let actionDelete = "";
   let actionDownload = "";
   let actionRename = "";
@@ -608,22 +618,18 @@ function openContextMenu(e, index) {
     url += "/";
     if (DATA.allow_archive) {
       actionDownload = `
-      <li class="contextMenuItem">
-        <a class="menu-href" href="${url}?zip" title="打包并下载">打包并下载</a>
-      </li>`;
+      <li class="contextMenuItem" onclick="openURL('${url}?zip')">打包并下载</li>`;
     }
   } else {
     actionDownload = `
-    <li class="contextMenuItem">
-      <a class="menu-href" href="${url}" title="下载" download>下载</a>
-    </li>`;
+    <li class="contextMenuItem" onclick="openURL('${url}')">下载</li>`;
   }
   if (DATA.allow_delete) {
     if (DATA.allow_upload) {
       actionRename = `<li class="contextMenuItem" onclick="renamePath(${index})" id="renameBtn${index}" title="重命名">重命名</li>`;
       actionMove = `<li class="contextMenuItem" onclick="movePathByFileTree(${index})" id="moveBtn${index}" title="移动">移动</li>`;
       if (!isDir) {
-        actionEdit = `<li class="contextMenuItem"><a class="menu-href" title="编辑" target="_blank" href="${url}?edit">编辑</a></li>`;
+        actionEdit = `<li class="contextMenuItem" onclick="openURL('${url}?edit', true)">编辑</li>`;
         actionCopyFile = `<li class="contextMenuItem" onclick="copyFile(${index})" id="copyFileBtn${index}" title="拷贝">拷贝</li>`;
       }
     }
@@ -634,7 +640,7 @@ function openContextMenu(e, index) {
     actionDirSize = `<li class="contextMenuItem" onclick="calculateDirSize(${index})" id="dirSizeBtn${index}" title="统计文件大小">统计文件大小</li>`;
   }
   if (!actionEdit && !isDir) {
-    actionView = `<li class="contextMenuItem"><a class="menu-href" title="查看" target="_blank" href="${url}?view">${ICONS.view}</a></li>`;
+    actionView = `<li class="contextMenuItem" onclick="openURL('${url}?view', true)">查看</li>`;
   }
   let actions = `
   <ul>
@@ -651,17 +657,10 @@ function openContextMenu(e, index) {
   </ul>`
 
   const menus = document.getElementById('customContextMenu');
-  menus.classList.remove('hidden');
   menus.innerHTML = `${actions}`
   menus.style.display = 'block';
   menus.style.left = e.pageX + 'px';
   menus.style.top = e.pageY + 'px';
-
-  document.querySelectorAll(".contextMenuItem").forEach(item => {
-    item.addEventListener("click", () => {
-      menus.style.display = 'none';
-    })
-  })
 
   const selectAllCheckbox = document.querySelector('#selectAllCheckbox');
   selectAllCheckbox.checked = false;
@@ -672,6 +671,7 @@ function openContextMenu(e, index) {
   const checkbox = document.querySelector(`input[name="select[]"][value="${index}"]`);
   checkbox.checked = true
   toggleCheckBox();
+  menus.classList.remove('hidden');
 }
 
 // key is index, value is timer
@@ -947,6 +947,7 @@ async function deleteBatchPaths(items) {
 }
 
 async function calculateDirSize(index) {
+  cleanContextMenu();
   const file = DATA.paths[index];
   const url = newUrl(file.name)
   try {
@@ -986,8 +987,16 @@ async function moveBatchPaths(items) {
     mylog("data", data)
     const nodes = pathDataToNodes(data, true)
     mylog("nodes", nodes)
-    $('#tree').tree("loadData", nodes);
+    $('#tree').tree("loadData", wrapDefaultPathPrefixNode(nodes));
   })
+}
+
+function wrapDefaultPathPrefixNode(nodes) {
+  return [{
+    name: "/root",
+    id: getDefaultPathPrefix(),
+    children: nodes
+  }]
 }
 
 async function doDeletePathWithoutComfirm(url, callback) {
@@ -1048,6 +1057,7 @@ async function renamePath(index) {
 }
 
 function movePathByFileTree(index) {
+  cleanContextMenu();
   const buttons = {
     "确认": async function () {
       if (selectedPath === notChoosePath) {
@@ -1072,7 +1082,7 @@ function movePathByFileTree(index) {
     mylog("data", data)
     const nodes = pathDataToNodes(data, true)
     mylog("nodes", nodes)
-    $('#tree').tree("loadData", nodes);
+    $('#tree').tree("loadData", wrapDefaultPathPrefixNode(nodes));
   })
 }
 
@@ -1087,6 +1097,7 @@ function getDefaultPathPrefix() {
 }
 
 async function copyFile(index) {
+  cleanContextMenu();
   const file = DATA.paths[index];
   const name = file.name
   let newName = prompt("拷贝副本文件名", name)
@@ -1184,6 +1195,7 @@ async function movePath(index) {
 }
 
 function copyPath(index) {
+  cleanContextMenu();
   const file = DATA.paths[index];
   if (!file) return;
   const [filePath] = urlToRootPath(newUrl(file.name))
@@ -1536,7 +1548,8 @@ function initFileTree() {
     const node = e.node;
     mylog("tree open node", node);
     selectedPath = node.id || notChoosePath;
-    document.getElementById("selectedPath").textContent = `已选择路径：${selectedPath.replace(getDefaultPathPrefix(), "")}`
+    const currentPath = selectedPath.replace(getDefaultPathPrefix(), "")
+    document.getElementById("selectedPath").textContent = `已选择路径：${currentPath === "" ? "根目录" : currentPath}`
     if (node.children && node.children.length > 0 && !hasLoadingChildren(node)) {
       return;
     }
