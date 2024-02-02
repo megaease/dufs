@@ -604,7 +604,7 @@ function openContextMenu(e, index) {
   let url = newUrl(file.name)
   let isDir = file.path_type.endsWith("Dir");
 
-  let actionOpen = `<li class="contextMenuItem" onclick="openURL('${url}', ${isDir ? true : false})">打开</li>`;
+  let actionOpen = `<li class="contextMenuItem" onclick="openURL('${url}', ${isDir ? false : true})">打开</li>`;
   let actionDelete = "";
   let actionDownload = "";
   let actionRename = "";
