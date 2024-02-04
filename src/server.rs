@@ -58,7 +58,8 @@ const JQTREE_JS: &str = include_str!("../assets/jqtree.js");
 const FAVICON_ICO: &[u8] = include_bytes!("../assets/favicon.ico");
 const INDEX_NAME: &str = "index.html";
 const BUF_SIZE: usize = 65536;
-const EDITABLE_TEXT_MAX_SIZE: u64 = 4194304; // 4M
+const EDITABLE_TEXT_MAX_SIZE: u64 = 4194304;
+// 4M
 const RESUMABLE_UPLOAD_MIN_SIZE: u64 = 20971520; // 20M
 
 use serde::{Serialize, Deserialize};
@@ -261,7 +262,7 @@ impl Server {
                                 access_paths,
                                 &mut res,
                             )
-                            .await?;
+                                .await?;
                         } else {
                             self.handle_render_index(
                                 path,
@@ -272,7 +273,7 @@ impl Server {
                                 access_paths,
                                 &mut res,
                             )
-                            .await?;
+                                .await?;
                         }
                     } else if render_index || render_spa {
                         self.handle_render_index(
@@ -284,7 +285,7 @@ impl Server {
                             access_paths,
                             &mut res,
                         )
-                        .await?;
+                            .await?;
                     } else if query_params.contains_key("zip") {
                         if !allow_archive {
                             status_not_found(&mut res);
@@ -301,7 +302,7 @@ impl Server {
                             access_paths,
                             &mut res,
                         )
-                        .await?;
+                            .await?;
                     } else if query_params.contains_key("statistic") {
                         self.handle_statistic_dir(path, &mut res).await?;
                     } else {
@@ -314,15 +315,23 @@ impl Server {
                             access_paths,
                             &mut res,
                         )
-                        .await?;
+                            .await?;
                     }
                 } else if is_file {
                     if query_params.contains_key("edit") {
                         self.handle_deal_file(path, DataKind::Edit, head_only, user, &mut res)
                             .await?;
                     } else if query_params.contains_key("view") {
-                        self.handle_deal_file(path, DataKind::View, head_only, user, &mut res)
-                            .await?;
+                        match is_image_file(path) {
+                            true => {
+                                self.handle_send_file(path, headers, head_only, &mut res, "")
+                                    .await?;
+                            }
+                            false => {
+                                self.handle_deal_file(path, DataKind::View, head_only, user, &mut res)
+                                    .await?;
+                            }
+                        }
                     } else {
                         self.handle_send_file(path, headers, head_only, &mut res, "application/octet-stream")
                             .await?;
@@ -340,7 +349,7 @@ impl Server {
                         access_paths,
                         &mut res,
                     )
-                    .await?;
+                        .await?;
                 } else {
                     status_not_found(&mut res);
                 }
@@ -575,7 +584,7 @@ impl Server {
             }
             (size, count)
         })
-        .await?;
+            .await?;
         let output = format!(r#"{{"size":{},"count":{}}}"#, size, count);
         res.headers_mut()
             .typed_insert(ContentType::from(mime_guess::mime::APPLICATION_JSON));
@@ -646,7 +655,7 @@ impl Server {
                 }
                 paths
             })
-            .await?;
+                .await?;
             for search_path in search_paths.into_iter() {
                 if let Ok(Some(item)) = self.to_pathitem(search_path, path.to_path_buf()).await {
                     paths.push(item);
@@ -693,7 +702,7 @@ impl Server {
                 compression,
                 running,
             )
-            .await
+                .await
             {
                 error!("Failed to zip {}, {}", path.display(), e);
             }
@@ -731,7 +740,7 @@ impl Server {
             .insert("content-type", HeaderValue::from_static("application/zip"));
         let compression = self.args.compress.to_compression();
         let running = self.running.clone();
-        let file_paths= file_paths.clone();
+        let file_paths = file_paths.clone();
         tokio::spawn(async move {
             if let Err(e) = zip_dir_or_file(
                 &mut writer,
@@ -741,7 +750,7 @@ impl Server {
                 access_paths,
                 running,
             )
-            .await
+                .await
             {
                 error!("Failed to zip {}, {}", base_path.display(), e);
             }
@@ -1367,8 +1376,8 @@ impl Server {
 
     async fn to_pathitem<P: AsRef<Path>>(&self, path: P, base_path: P) -> Result<Option<PathItem>> {
         let path = path.as_ref();
-        let (meta,) = tokio::join!(fs::symlink_metadata(&path));
-        let (meta,) = (meta?,);
+        let (meta, ) = tokio::join!(fs::symlink_metadata(&path));
+        let (meta, ) = (meta?, );
         let is_symlink = meta.is_symlink();
         if !self.args.allow_symlink && is_symlink && !self.is_root_contained(path).await {
             return Ok(None);
@@ -1545,6 +1554,7 @@ impl Ord for PathType {
         to_value(self).cmp(&to_value(other))
     }
 }
+
 impl PartialOrd for PathType {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
@@ -1608,6 +1618,16 @@ fn res_multistatus(res: &mut Response, content: &str) {
     ));
 }
 
+fn is_image_file(file_path: &Path) -> bool {
+    if let Some(extension) = file_path.extension() {
+        if let Some(ext_str) = extension.to_str() {
+            let lowercase_ext = ext_str.to_lowercase();
+            return lowercase_ext == "png" || lowercase_ext == "jpg" || lowercase_ext == "jpeg" || lowercase_ext == "gif" || lowercase_ext == "bmp";
+        }
+    }
+    false
+}
+
 async fn zip_dir<W: AsyncWrite + Unpin>(
     writer: &mut W,
     dir: &Path,
@@ -1660,7 +1680,7 @@ async fn zip_dir<W: AsyncWrite + Unpin>(
         }
         paths
     })
-    .await?;
+        .await?;
     for zip_path in zip_paths.into_iter() {
         let filename = match zip_path.strip_prefix(dir).ok().and_then(|v| v.to_str()) {
             Some(v) => v,
@@ -1785,7 +1805,7 @@ fn set_content_disposition(res: &mut Response, inline: bool, filename: &str) -> 
         })
         .collect();
     let value = if filename.is_ascii() {
-        HeaderValue::from_str(&format!("{kind}; filename=\"{}\"", filename,))?
+        HeaderValue::from_str(&format!("{kind}; filename=\"{}\"", filename, ))?
     } else {
         HeaderValue::from_str(&format!(
             "{kind}; filename=\"{}\"; filename*=UTF-8''{}",
