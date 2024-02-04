@@ -102,3 +102,9 @@ COPY /path
 ```text
 MOVE /path
 ```
+
+### unzip file (path should be a file)
+
+```text
+GET /path?unzip
+```
