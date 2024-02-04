@@ -326,7 +326,8 @@ function addBreadcrumb(href, uri_prefix) {
 
 function setupIndexPage() {
   const hints = document.querySelector("#operationHints")
-  hints.textContent = "单击选中，双击打开，shift + 单击范围选，ctrl/cmd + 单击多选，ESC 取消，右键菜单";
+  // hints.textContent = "单击选中，双击打开，shift + 单击范围选，ctrl/cmd + 单击多选，ESC 取消，右键菜单";
+  hints.innerHTML = "单击选中，双击打开，shift + 单击范围选，ctrl/cmd + 单击多选，ESC 取消，右键菜单<br>解压只支持 zip 格式，上传文件夹请先压缩，然后上传后解压"
   hints.classList.remove("hidden");
 
   if (DATA.allow_archive) {
@@ -601,6 +602,22 @@ function addPath(file, index) {
 </tr>`)
 }
 
+async function unzipFile(index) {
+  const file = DATA.paths[index];
+  let url = newUrl(file.name);
+  url += "?unzip";
+
+  alert("解压已经开始请稍后，解压后会自动刷新页面");
+  try {
+    await fetch(url).then(response => {
+      assertResOK(response);
+      window.location.reload();
+    });
+  } catch (err) {
+    alert(`解压文件失败, ${err.message}`);
+  }
+}
+
 function openURL(url, newTab = false) {
   cleanContextMenu();
   if (newTab) {
@@ -627,6 +644,7 @@ function openContextMenu(e, index) {
   let actionView = "";
   let actionCopyFile = "";
   let actionDirSize = "";
+  let actionUnzip = "";
   let actionCopyPath = `<li class="contextMenuItem" onclick="copyPath(${index})" title="复制路径" target="_blank">复制路径</li>`
   if (isDir) {
     url += "/";
@@ -652,6 +670,8 @@ function openContextMenu(e, index) {
   }
   if (isDir) {
     actionDirSize = `<li class="contextMenuItem" onclick="calculateDirSize(${index})" id="dirSizeBtn${index}" title="统计文件大小">统计文件大小</li>`;
+  } else {
+    actionUnzip = `<li class="contextMenuItem" onclick="unzipFile(${index})" id="unzipBtn${index}" title="解压缩">解压 zip 文件</li>`;
   }
   if (!actionEdit && !isDir) {
     actionView = `<li class="contextMenuItem" onclick="openURL('${url}?view', true)">查看</li>`;
@@ -661,6 +681,7 @@ function openContextMenu(e, index) {
     ${actionOpen}
     ${actionDirSize}
     ${actionDownload}
+    ${actionUnzip}
     ${actionView}
     ${actionRename}
     ${actionMove}
