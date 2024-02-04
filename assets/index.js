@@ -98,7 +98,8 @@ let $userBtn;
  */
 let $userName;
 
-let mylog = console.log;
+// let mylog = console.log;
+let mylog = () => { };
 
 function ready() {
   $pathsTable = document.querySelector(".paths-table")
@@ -624,6 +625,7 @@ async function unzipFile(index) {
   const output = file.name.replace(/\.zip$/, "");
   const outputUrl = newUrl(output);
   let progressIndex = 0
+  let progress = 0
   try {
     const res1 = await fetch(outputUrl, {
       method: "HEAD",
@@ -636,7 +638,7 @@ async function unzipFile(index) {
     cleanContextMenu();
     document.getElementById('loadingIndicator').style.display = 'flex';
     document.querySelector(".loading-text").textContent = `正在解压中，请勿刷新，当前进度 0%`
-    const progress = setInterval(() => {
+    progress = setInterval(() => {
       if (progressIndex < 99) {
         progressIndex += 1;
         document.querySelector(".loading-text").textContent = `正在解压中，请勿刷新，当前进度 ${progressIndex}%`
@@ -647,8 +649,10 @@ async function unzipFile(index) {
     const resp2 = await fetch(url)
     await assertResOK(resp2);
     document.getElementById('loadingIndicator').style.display = 'none';
+    clearInterval(progress);
     window.location.reload();
   } catch (err) {
+    clearInterval(progress);
     alert(`解压文件失败, ${err.message}`);
     document.getElementById('loadingIndicator').style.display = 'none';
   }
