@@ -606,13 +606,25 @@ async function unzipFile(index) {
   const file = DATA.paths[index];
   let url = newUrl(file.name);
   url += "?unzip";
-
+  if (!file.name.endsWith(".zip")) {
+    alert("只支持解压 zip 文件");
+    return;
+  }
+  const output = file.name.replace(/\.zip$/, "");
+  const outputUrl = newUrl(output);
   alert("解压已经开始请稍后，解压后会自动刷新页面");
   try {
-    await fetch(url).then(response => {
-      assertResOK(response);
-      window.location.reload();
-    });
+    const res1 = await fetch(outputUrl, {
+      method: "HEAD",
+    })
+    if (res1.status === 200) {
+      if (!confirm(`解压后文件夹 ${output} 已存在，是否覆盖？`)) {
+        return;
+      }
+    }
+    const resp2 = await fetch(url)
+    await assertResOK(resp2);
+    window.location.reload();
   } catch (err) {
     alert(`解压文件失败, ${err.message}`);
   }
