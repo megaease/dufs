@@ -602,6 +602,17 @@ function addPath(file, index) {
 </tr>`)
 }
 
+/**
+ * 
+ * @param {file size} size 
+ * @returns time of unzip (statistics based, 5mb/s)
+ */
+function getUnzipTime(size) {
+  const mb = Math.floor(size / 1024 / 1024);
+  const millSec = mb * 1000 / 5;
+  return millSec
+}
+
 async function unzipFile(index) {
   const file = DATA.paths[index];
   let url = newUrl(file.name);
@@ -612,6 +623,7 @@ async function unzipFile(index) {
   }
   const output = file.name.replace(/\.zip$/, "");
   const outputUrl = newUrl(output);
+  let progressIndex = 0
   try {
     const res1 = await fetch(outputUrl, {
       method: "HEAD",
@@ -623,12 +635,22 @@ async function unzipFile(index) {
     }
     cleanContextMenu();
     document.getElementById('loadingIndicator').style.display = 'flex';
+    document.querySelector(".loading-text").textContent = `正在解压中，请勿刷新，当前进度 0%`
+    const progress = setInterval(() => {
+      if (progressIndex < 99) {
+        progressIndex += 1;
+        document.querySelector(".loading-text").textContent = `正在解压中，请勿刷新，当前进度 ${progressIndex}%`
+      } else {
+        clearInterval(progress);
+      }
+    }, getUnzipTime(file.size) / 100);
     const resp2 = await fetch(url)
     await assertResOK(resp2);
     document.getElementById('loadingIndicator').style.display = 'none';
     window.location.reload();
   } catch (err) {
     alert(`解压文件失败, ${err.message}`);
+    document.getElementById('loadingIndicator').style.display = 'none';
   }
 }
 
