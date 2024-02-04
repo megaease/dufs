@@ -322,16 +322,7 @@ impl Server {
                         self.handle_deal_file(path, DataKind::Edit, head_only, user, &mut res)
                             .await?;
                     } else if query_params.contains_key("view") {
-                        match is_image_file(path) {
-                            true => {
-                                self.handle_send_file(path, headers, head_only, &mut res, "")
-                                    .await?;
-                            }
-                            false => {
-                                self.handle_deal_file(path, DataKind::View, head_only, user, &mut res)
-                                    .await?;
-                            }
-                        }
+                        self.handle_send_file(path, headers, head_only, &mut res, "").await?;
                     } else {
                         self.handle_send_file(path, headers, head_only, &mut res, "application/octet-stream")
                             .await?;
@@ -1409,7 +1400,7 @@ impl Server {
 enum DataKind {
     Index,
     Edit,
-    View,
+    // View,
 }
 
 #[derive(Debug, Serialize)]
@@ -1616,16 +1607,6 @@ fn res_multistatus(res: &mut Response, content: &str) {
 {content}
 </D:multistatus>"#,
     ));
-}
-
-fn is_image_file(file_path: &Path) -> bool {
-    if let Some(extension) = file_path.extension() {
-        if let Some(ext_str) = extension.to_str() {
-            let lowercase_ext = ext_str.to_lowercase();
-            return lowercase_ext == "png" || lowercase_ext == "jpg" || lowercase_ext == "jpeg" || lowercase_ext == "gif" || lowercase_ext == "bmp";
-        }
-    }
-    false
 }
 
 async fn zip_dir<W: AsyncWrite + Unpin>(
