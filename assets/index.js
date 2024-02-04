@@ -612,7 +612,6 @@ async function unzipFile(index) {
   }
   const output = file.name.replace(/\.zip$/, "");
   const outputUrl = newUrl(output);
-  alert("解压已经开始请稍后，解压后会自动刷新页面");
   try {
     const res1 = await fetch(outputUrl, {
       method: "HEAD",
@@ -622,8 +621,11 @@ async function unzipFile(index) {
         return;
       }
     }
+    cleanContextMenu();
+    document.getElementById('loadingIndicator').style.display = 'flex';
     const resp2 = await fetch(url)
     await assertResOK(resp2);
+    document.getElementById('loadingIndicator').style.display = 'none';
     window.location.reload();
   } catch (err) {
     alert(`解压文件失败, ${err.message}`);
