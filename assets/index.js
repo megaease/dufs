@@ -618,7 +618,7 @@ function openContextMenu(e, index) {
   let url = newUrl(file.name)
   let isDir = file.path_type.endsWith("Dir");
 
-  let actionOpen = `<li class="contextMenuItem" onclick="openURL('${url}', ${isDir ? false : true})">打开</li>`;
+  let actionOpen = `<li class="contextMenuItem" onclick="openURL('${isDir ? url : url + "?view"}', ${isDir ? false : true})">打开</li>`;
   let actionDelete = "";
   let actionDownload = "";
   let actionRename = "";
@@ -964,6 +964,7 @@ async function downloadBatchPaths(items) {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
+      a.download = `批量下载-${getCurrentName()}-${new Date().toISOString()}.zip`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -973,6 +974,12 @@ async function downloadBatchPaths(items) {
   } catch (err) {
     alert(`下载文件失败, ${err.message}`);
   }
+}
+
+function getCurrentName() {
+  const paths = DATA.href.split("/")
+  if (paths.length === 0) return "";
+  return paths[paths.length - 1];
 }
 
 /**
