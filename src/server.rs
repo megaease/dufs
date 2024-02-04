@@ -721,6 +721,11 @@ impl Server {
         if !file_name.ends_with(".zip") {
             return Err(anyhow!("{} is not a zip file", file_name));
         }
+        // create directory with the same name as the zip file
+        let out_dir = out_dir.join(file_name.trim_end_matches(".zip"));
+        if !out_dir.exists() {
+            create_dir_all(&out_dir).await?;
+        }
 
         let mut reader = ZipFileReader::new(archive).await?;
 
