@@ -9,7 +9,7 @@ use crate::utils::{
 use crate::Args;
 
 use anyhow::{anyhow, Result};
-use async_zip::{tokio::write::ZipFileWriter, Compression, ZipDateTime, ZipEntryBuilder};
+use async_zip::{tokio::write::ZipFileWriter, Compression, ZipDateTime, ZipEntryBuilder, base::read::seek::ZipFileReader};
 use bytes::{Buf, Bytes};
 use chrono::{LocalResult, TimeZone, Utc};
 use futures_util::{pin_mut, TryStreamExt};
@@ -38,11 +38,11 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{self, AtomicBool};
 use std::sync::Arc;
 use std::time::SystemTime;
-use tokio::fs::File;
+use tokio::fs::{create_dir_all, File, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWrite};
 use tokio::{fs, io};
 
-use tokio_util::compat::FuturesAsyncWriteCompatExt;
+use tokio_util::compat::{FuturesAsyncWriteCompatExt, TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tokio_util::io::{ReaderStream, StreamReader};
 use uuid::Uuid;
 use walkdir::WalkDir;
@@ -323,6 +323,8 @@ impl Server {
                             .await?;
                     } else if query_params.contains_key("view") {
                         self.handle_send_file(path, headers, head_only, &mut res, "").await?;
+                    } else if query_params.contains_key("unzip") {
+                        self.handle_unzip_file(path).await?;
                     } else {
                         self.handle_send_file(path, headers, head_only, &mut res, "application/octet-stream")
                             .await?;
@@ -706,6 +708,53 @@ impl Server {
         );
         let boxed_body = stream_body.boxed();
         *res.body_mut() = boxed_body;
+        Ok(())
+    }
+
+    // extract a zip file
+    async fn handle_unzip_file(&self, path: &Path) -> Result<()> {
+        let out_dir = path.parent().unwrap();
+        let file = File::open(path).await?;
+        let archive = file.compat();
+        // check if the file is a zip file
+        let file_name = path.file_name().unwrap().to_str().unwrap();
+        if !file_name.ends_with(".zip") {
+            return Err(anyhow!("{} is not a zip file", file_name));
+        }
+
+        let mut reader = ZipFileReader::new(archive).await?;
+
+        for index in 0..reader.file().entries().len() {
+            let entry = reader.file().entries().get(index).unwrap();
+            let raw = entry.filename().as_bytes();
+            let file_name = String::from_utf8_lossy(raw);
+            let file_path = out_dir.join(file_name.as_ref());
+            let entry_is_dir = file_name.ends_with('/');
+            let mut entry_reader = reader.reader_without_entry(index).await?;
+            if entry_is_dir {
+                // The directory may have been created if iteration is out of order.
+                if !file_path.exists() {
+                    create_dir_all(&file_path).await?;
+                }
+            } else {
+                let parent = file_path.parent().unwrap();
+                if !parent.is_dir() {
+                    create_dir_all(parent).await?;
+                }
+                match file_path.exists() {
+                    // overwrite the file
+                    true => {
+                        let writer = OpenOptions::new().write(true).open(&file_path).await?;
+                        futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
+                    }
+                    false => {
+                        let writer = OpenOptions::new().write(true).create_new(true).open(&file_path).await?;
+                        futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 

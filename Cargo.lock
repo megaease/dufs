@@ -518,6 +518,7 @@ dependencies = [
  "content_inspector",
  "diqwest",
  "form_urlencoded",
+ "futures-lite",
  "futures-util",
  "glob",
  "headers",
