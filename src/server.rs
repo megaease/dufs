@@ -206,7 +206,7 @@ impl Server {
                 .iter()
                 .any(|v| v.as_str() == req_path)
             {
-                self.handle_send_file(&self.args.serve_path, headers, head_only, &mut res)
+                self.handle_send_file(&self.args.serve_path, headers, head_only, &mut res, "")
                     .await?;
             } else {
                 status_not_found(&mut res);
@@ -324,7 +324,7 @@ impl Server {
                         self.handle_deal_file(path, DataKind::View, head_only, user, &mut res)
                             .await?;
                     } else {
-                        self.handle_send_file(path, headers, head_only, &mut res)
+                        self.handle_send_file(path, headers, head_only, &mut res, "application/octet-stream")
                             .await?;
                     }
                 } else if render_spa {
@@ -774,7 +774,7 @@ impl Server {
             .map(|v| v.is_file())
             .unwrap_or_default()
         {
-            self.handle_send_file(&index_path, headers, head_only, res)
+            self.handle_send_file(&index_path, headers, head_only, res, "")
                 .await?;
         } else if self.args.render_try_index {
             self.handle_ls_dir(path, true, query_params, head_only, user, access_paths, res)
@@ -794,7 +794,7 @@ impl Server {
     ) -> Result<()> {
         if path.extension().is_none() {
             let path = self.args.serve_path.join(INDEX_NAME);
-            self.handle_send_file(&path, headers, head_only, res)
+            self.handle_send_file(&path, headers, head_only, res, "")
                 .await?;
         } else {
             status_not_found(res)
@@ -812,7 +812,7 @@ impl Server {
             match self.args.assets.as_ref() {
                 Some(assets_path) => {
                     let path = assets_path.join(name);
-                    self.handle_send_file(&path, headers, false, res).await?;
+                    self.handle_send_file(&path, headers, false, res, "").await?;
                 }
                 None => match name {
                     "index.js" => {
@@ -866,6 +866,7 @@ impl Server {
         headers: &HeaderMap<HeaderValue>,
         head_only: bool,
         res: &mut Response,
+        content_type: &str,
     ) -> Result<()> {
         let (file, meta) = tokio::join!(fs::File::open(path), fs::metadata(path),);
         let (mut file, meta) = (file?, meta?);
@@ -910,10 +911,13 @@ impl Server {
         } else {
             None
         };
-
+        let content_type = match content_type {
+            "" => get_content_type(path).await?,
+            _ => content_type.to_string(),
+        };
         res.headers_mut().insert(
             CONTENT_TYPE,
-            HeaderValue::from_str(&get_content_type(path).await?)?,
+            HeaderValue::from_str(content_type.as_str())?,
         );
 
         let filename = try_get_file_name(path)?;
