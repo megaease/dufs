@@ -328,7 +328,7 @@ function addBreadcrumb(href, uri_prefix) {
 function setupIndexPage() {
   const hints = document.querySelector("#operationHints")
   // hints.textContent = "单击选中，双击打开，shift + 单击范围选，ctrl/cmd + 单击多选，ESC 取消，右键菜单";
-  hints.innerHTML = "单击选中，双击打开，shift + 单击范围选，ctrl/cmd + 单击多选，ESC 取消，右键菜单<br>解压只支持 zip 格式，上传文件夹请先压缩，然后上传后解压"
+  hints.innerHTML = "单击选中，双击打开，shift + 单击范围选，ctrl/cmd + 单击多选，ESC 取消，右键菜单<br>解压只支持 zip/tar 格式，tar.gz 等不支持，上传文件夹请先压缩，然后上传后解压"
   hints.classList.remove("hidden");
 
   if (DATA.allow_archive) {
@@ -617,12 +617,16 @@ function getUnzipTime(size) {
 async function unzipFile(index) {
   const file = DATA.paths[index];
   let url = newUrl(file.name);
-  url += "?unzip";
-  if (!file.name.endsWith(".zip")) {
-    alert("只支持解压 zip 文件");
+  let output = file.name.replace(/\.zip$/, "");
+  if (file.name.endsWith(".zip")) {
+    url += "?unzip"
+  } else if (file.name.endsWith(".tar")) {
+    output = file.name.replace(/\.tar$/, "");
+    url += "?untar"
+  } else {
+    alert("只支持解压 zip/tar 文件");
     return;
   }
-  const output = file.name.replace(/\.zip$/, "");
   const outputUrl = newUrl(output);
   let progressIndex = 0
   let progress = 0
@@ -711,7 +715,7 @@ function openContextMenu(e, index) {
   if (isDir) {
     actionDirSize = `<li class="contextMenuItem" onclick="calculateDirSize(${index})" id="dirSizeBtn${index}" title="统计文件大小">统计文件大小</li>`;
   } else {
-    actionUnzip = `<li class="contextMenuItem" onclick="unzipFile(${index})" id="unzipBtn${index}" title="解压缩">解压 zip 文件</li>`;
+    actionUnzip = `<li class="contextMenuItem" onclick="unzipFile(${index})" id="unzipBtn${index}" title="解压缩">解压 zip/tar 文件</li>`;
   }
   if (!actionEdit && !isDir) {
     actionView = `<li class="contextMenuItem" onclick="openURL('${url}?view', true)">查看</li>`;
