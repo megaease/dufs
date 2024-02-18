@@ -47,6 +47,8 @@ use tokio_util::io::{ReaderStream, StreamReader};
 use uuid::Uuid;
 use walkdir::WalkDir;
 use xml::escape::escape_str_pcdata;
+use async_tar::Archive;
+use async_std::prelude::*;
 
 pub type Request = hyper::Request<Incoming>;
 pub type Response = hyper::Response<BoxBody<Bytes, anyhow::Error>>;
@@ -325,6 +327,8 @@ impl Server {
                         self.handle_send_file(path, headers, head_only, &mut res, "").await?;
                     } else if query_params.contains_key("unzip") {
                         self.handle_unzip_file(path).await?;
+                    } else if query_params.contains_key("untar") {
+                        self.handle_untar_file(path).await?;
                     } else {
                         self.handle_send_file(path, headers, head_only, &mut res, "application/octet-stream")
                             .await?;
@@ -760,6 +764,55 @@ impl Server {
             }
         }
 
+        Ok(())
+    }
+
+    async fn handle_untar_file(&self, path: &Path) -> Result<()> {
+        let out_dir = path.parent().unwrap();
+        let file = File::open(path).await?;
+        let archive = file.compat();
+        // check if the file is a tar file
+        let file_name = path.file_name().unwrap().to_str().unwrap();
+        if !file_name.ends_with(".tar") {
+            return Err(anyhow!("{} is not a tar file", file_name));
+        }
+        let out_dir = out_dir.join(file_name.trim_end_matches(".tar"));
+        if !out_dir.exists() {
+            create_dir_all(&out_dir).await?;
+        }
+
+        let reader = Archive::new(archive);
+        let mut entries = reader.entries().unwrap();
+        while let Some(entry) = entries.next().await {
+            let mut entry = entry?;
+            let entry_path = entry.path()?;
+            let raw = entry_path.to_str().unwrap();
+            let file_name = String::from_utf8_lossy(raw.as_bytes());
+            let file_path = out_dir.join(file_name.as_ref());
+            let entry_is_dir = file_name.ends_with('/');
+            if entry_is_dir {
+                // The directory may have been created if iteration is out of order.
+                if !file_path.exists() {
+                    create_dir_all(&file_path).await?;
+                }
+            } else {
+                let parent = file_path.parent().unwrap();
+                if !parent.is_dir() {
+                    create_dir_all(parent).await?;
+                }
+                match file_path.exists() {
+                    // overwrite the file
+                    true => {
+                        let writer = OpenOptions::new().write(true).open(&file_path).await?;
+                        futures_lite::io::copy(&mut entry, &mut writer.compat_write()).await?;
+                    }
+                    false => {
+                        let writer = OpenOptions::new().write(true).create_new(true).open(&file_path).await?;
+                        futures_lite::io::copy(&mut entry, &mut writer.compat_write()).await?;
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
