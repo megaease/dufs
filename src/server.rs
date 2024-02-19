@@ -787,6 +787,7 @@ impl Server {
                 let progress = format!("data: {}/{}\n\n", count, length);
                 sse_writer.write_all(progress.as_bytes()).await.unwrap();
             }
+            sse_writer.write_all("data: done\n\n".as_bytes()).await.unwrap();
         });
 
         let reader_stream = ReaderStream::new(sse_reader);
@@ -884,6 +885,7 @@ impl Server {
                 let progress = format!("data: {}/{}\n\n", count, len);
                 writer.write_all(progress.as_bytes()).await.unwrap();
             }
+            writer.write_all("data: done\n\n".as_bytes()).await.unwrap();
         });
         let reader_stream = ReaderStream::new(reader);
         let stream_body = StreamBody::new(

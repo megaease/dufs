@@ -6,6 +6,10 @@
         window.addEventListener("DOMContentLoaded", function () {
             var evsrc = new EventSource('http://127.0.0.1:5001/files/s01.zip?unzip');
             evsrc.onmessage = function (ev) {
+                if (ev.data === "done") {
+                    console.log("closing");
+                    evsrc.close();
+                }
                 document.getElementById("log")
                     .insertAdjacentHTML("beforeend", "<li>" + ev.data + "</li>");
             }
