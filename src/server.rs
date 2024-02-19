@@ -37,7 +37,6 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{self, AtomicBool};
 use std::sync::Arc;
-use std::thread::sleep;
 use std::time::SystemTime;
 use tokio::fs::{create_dir_all, File, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWrite, AsyncWriteExt};
@@ -1501,8 +1500,10 @@ impl Server {
     }
 
     fn resolve_path(&self, path: &str) -> Option<String> {
+        log::info!("resolve_path: {}", path);
         let path = path.trim_matches('/');
         let path = decode_uri(path)?;
+        log::info!("resolve: {}", path);
         let prefix = self.args.path_prefix.as_str();
         if prefix == "/" {
             return Some(path.to_string());
