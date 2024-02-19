@@ -163,7 +163,6 @@ impl Server {
                 return Ok(res);
             }
         };
-        log::info!("{} {}", method, relative_path);
 
         if method == Method::GET
             && self
@@ -231,7 +230,6 @@ impl Server {
         };
 
         let path = path.as_path();
-        log::info!("path: {}", path.display());
 
         let (is_miss, is_dir, is_file, size) = match fs::metadata(path).await.ok() {
             Some(meta) => (false, meta.is_dir(), meta.is_file(), meta.len()),
@@ -1514,6 +1512,7 @@ impl Server {
 
     fn resolve_path(&self, path: &str) -> Option<String> {
         let path = decode_uri(path)?;
+        log::info!("resolve_path: {}", path);
         let path = path.trim_matches('/');
         let mut parts = vec![];
         for comp in Path::new(path).components() {
