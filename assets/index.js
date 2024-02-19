@@ -603,17 +603,6 @@ function addPath(file, index) {
 </tr>`)
 }
 
-/**
- * 
- * @param {file size} size 
- * @returns time of unzip (statistics based, 5mb/s)
- */
-function getUnzipTime(size) {
-  const mb = Math.floor(size / 1024 / 1024);
-  const millSec = mb * 1000 / 5;
-  return millSec
-}
-
 async function unzipFile(index) {
   const file = DATA.paths[index];
   let url = newUrl(file.name);
@@ -628,8 +617,6 @@ async function unzipFile(index) {
     return;
   }
   const outputUrl = newUrl(output);
-  let progressIndex = 0
-  let progress = 0
   try {
     const res1 = await fetch(outputUrl, {
       method: "HEAD",
@@ -641,22 +628,25 @@ async function unzipFile(index) {
     }
     cleanContextMenu();
     document.getElementById('loadingIndicator').style.display = 'flex';
-    document.querySelector(".loading-text").textContent = `正在解压中，请勿刷新，当前进度 0%`
-    progress = setInterval(() => {
-      if (progressIndex < 99) {
-        progressIndex += 1;
-        document.querySelector(".loading-text").textContent = `正在解压中，请勿刷新，当前进度 ${progressIndex}%`
-      } else {
-        clearInterval(progress);
+    document.querySelector(".loading-text").textContent = `正在解压中，请勿刷新`
+    mylog("unzipFile url", url)
+    let evsrc = new EventSource(url);
+    evsrc.onmessage = function (e) {
+      if (e.data === "done") {
+        document.getElementById('loadingIndicator').style.display = 'none';
+        evsrc.close();
+        window.location.reload();
+        return;
       }
-    }, getUnzipTime(file.size) / 100);
-    const resp2 = await fetch(url)
-    await assertResOK(resp2);
-    document.getElementById('loadingIndicator').style.display = 'none';
-    clearInterval(progress);
-    window.location.reload();
+      document.querySelector(".loading-text").textContent = `正在解压中，请勿刷新，当前进度 ${e.data}`
+    }
+    evsrc.onerror = function (e) {
+      document.getElementById('loadingIndicator').style.display = 'none';
+      mylog("unzipFile error", e)
+      alert(`解压文件失败, ${JSON.stringify(e)}`);
+      evsrc.close();
+    }
   } catch (err) {
-    clearInterval(progress);
     alert(`解压文件失败, ${err.message}`);
     document.getElementById('loadingIndicator').style.display = 'none';
   }
