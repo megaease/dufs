@@ -153,6 +153,7 @@ impl Server {
         let mut res = Response::default();
 
         let req_path = req.uri().path();
+        log::info!("{} {}", req.method(), req_path);
         let headers = req.headers();
         let method = req.method().clone();
 
@@ -1500,10 +1501,8 @@ impl Server {
     }
 
     fn resolve_path(&self, path: &str) -> Option<String> {
-        log::info!("resolve_path: {}", path);
         let path = path.trim_matches('/');
         let path = decode_uri(path)?;
-        log::info!("resolve: {}", path);
         let prefix = self.args.path_prefix.as_str();
         if prefix == "/" {
             return Some(path.to_string());
