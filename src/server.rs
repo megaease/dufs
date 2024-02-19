@@ -163,6 +163,7 @@ impl Server {
                 return Ok(res);
             }
         };
+        log::info!("{} {}", method, relative_path);
 
         if method == Method::GET
             && self
@@ -230,6 +231,7 @@ impl Server {
         };
 
         let path = path.as_path();
+        log::info!("path: {}", path.display());
 
         let (is_miss, is_dir, is_file, size) = match fs::metadata(path).await.ok() {
             Some(meta) => (false, meta.is_dir(), meta.is_file(), meta.len()),
