@@ -39,7 +39,7 @@ use std::sync::atomic::{self, AtomicBool};
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::fs::{create_dir_all, File, OpenOptions};
-use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWrite};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWrite, AsyncWriteExt};
 use tokio::{fs, io};
 
 use tokio_util::compat::{FuturesAsyncWriteCompatExt, TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
@@ -326,9 +326,9 @@ impl Server {
                     } else if query_params.contains_key("view") {
                         self.handle_send_file(path, headers, head_only, &mut res, "").await?;
                     } else if query_params.contains_key("unzip") {
-                        self.handle_unzip_file(path).await?;
+                        self.handle_unzip_file(path, &mut res).await?;
                     } else if query_params.contains_key("untar") {
-                        self.handle_untar_file(path).await?;
+                        self.handle_untar_file(path, &mut res).await?;
                     } else {
                         self.handle_send_file(path, headers, head_only, &mut res, "application/octet-stream")
                             .await?;
@@ -716,7 +716,7 @@ impl Server {
     }
 
     // extract a zip file
-    async fn handle_unzip_file(&self, path: &Path) -> Result<()> {
+    async fn handle_unzip_file(&self, path: &Path, res: &mut Response) -> Result<()> {
         let out_dir = path.parent().unwrap();
         let file = File::open(path).await?;
         let archive = file.compat();
@@ -731,43 +731,89 @@ impl Server {
             create_dir_all(&out_dir).await?;
         }
 
+        res.headers_mut().insert(
+            "Access-Control-Allow-Origin", HeaderValue::from_static("*"),
+        );
+        res.headers_mut().insert(
+            "Access-Control-Expose-Headers", HeaderValue::from_static("Content-Type"),
+        );
+        res.headers_mut().insert(
+            "Content-Type", HeaderValue::from_static("text/event-stream"),
+        );
+        res.headers_mut().insert(
+            "Cache-Control", HeaderValue::from_static("no-cache"),
+        );
+        res.headers_mut().insert(
+            "Connection", HeaderValue::from_static("keep-alive"),
+        );
+
         let mut reader = ZipFileReader::new(archive).await?;
 
-        for index in 0..reader.file().entries().len() {
-            let entry = reader.file().entries().get(index).unwrap();
-            let raw = entry.filename().as_bytes();
-            let file_name = String::from_utf8_lossy(raw);
-            let file_path = out_dir.join(file_name.as_ref());
-            let entry_is_dir = file_name.ends_with('/');
-            let mut entry_reader = reader.reader_without_entry(index).await?;
-            if entry_is_dir {
-                // The directory may have been created if iteration is out of order.
-                if !file_path.exists() {
-                    create_dir_all(&file_path).await?;
-                }
-            } else {
-                let parent = file_path.parent().unwrap();
-                if !parent.is_dir() {
-                    create_dir_all(parent).await?;
-                }
-                match file_path.exists() {
-                    // overwrite the file
-                    true => {
-                        let writer = OpenOptions::new().write(true).open(&file_path).await?;
-                        futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
+        let (mut sse_writer, sse_reader) = tokio::io::duplex(BUF_SIZE);
+        let length = reader.file().entries().len();
+        let mut count = 0;
+
+        tokio::spawn(async move {
+            for index in 0..length {
+                let entry = reader.file().entries().get(index).unwrap();
+                let raw = entry.filename().as_bytes();
+                let file_name = String::from_utf8_lossy(raw);
+                let file_path = out_dir.join(file_name.as_ref());
+                let entry_is_dir = file_name.ends_with('/');
+                let mut entry_reader = reader.reader_without_entry(index).await.unwrap();
+                if entry_is_dir {
+                    // The directory may have been created if iteration is out of order.
+                    if !file_path.exists() {
+                        create_dir_all(&file_path).await.unwrap();
                     }
-                    false => {
-                        let writer = OpenOptions::new().write(true).create_new(true).open(&file_path).await?;
-                        futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
+                } else {
+                    let parent = file_path.parent().unwrap();
+                    if !parent.is_dir() {
+                        create_dir_all(parent).await.unwrap();
+                    }
+                    match file_path.exists() {
+                        // overwrite the file
+                        true => {
+                            let writer = OpenOptions::new().write(true).open(&file_path).await.unwrap();
+                            futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await.unwrap();
+                        }
+                        false => {
+                            let writer = OpenOptions::new().write(true).create_new(true).open(&file_path).await.unwrap();
+                            futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await.unwrap();
+                        }
                     }
                 }
+                count += 1;
+                let progress = format!("data: {}/{}\n\n", count, length);
+                sse_writer.write_all(progress.as_bytes()).await.unwrap();
             }
-        }
+        });
+
+        let reader_stream = ReaderStream::new(sse_reader);
+        let stream_body = StreamBody::new(
+            reader_stream
+                .map_ok(Frame::data)
+                .map_err(|err| anyhow!("{err}")),
+        );
+        let boxed_body = stream_body.boxed();
+        *res.body_mut() = boxed_body;
 
         Ok(())
     }
 
-    async fn handle_untar_file(&self, path: &Path) -> Result<()> {
+    async fn get_file_count(&self, path: &Path) -> u64 {
+        let file = File::open(path).await.unwrap();
+        let archive = file.compat();
+        let reader = Archive::new(archive);
+        let mut entries = reader.entries().unwrap();
+        let mut count = 0;
+        while let Some(_) = entries.next().await {
+            count += 1;
+        }
+        count
+    }
+
+    async fn handle_untar_file(&self, path: &Path, res: &mut Response) -> Result<()> {
         let out_dir = path.parent().unwrap();
         let file = File::open(path).await?;
         let archive = file.compat();
@@ -780,39 +826,73 @@ impl Server {
         if !out_dir.exists() {
             create_dir_all(&out_dir).await?;
         }
+        res.headers_mut().insert(
+            "Access-Control-Allow-Origin", HeaderValue::from_static("*"),
+        );
+        res.headers_mut().insert(
+            "Access-Control-Expose-Headers", HeaderValue::from_static("Content-Type"),
+        );
+        res.headers_mut().insert(
+            "Content-Type", HeaderValue::from_static("text/event-stream"),
+        );
+        res.headers_mut().insert(
+            "Cache-Control", HeaderValue::from_static("no-cache"),
+        );
+        res.headers_mut().insert(
+            "Connection", HeaderValue::from_static("keep-alive"),
+        );
 
         let reader = Archive::new(archive);
         let mut entries = reader.entries().unwrap();
-        while let Some(entry) = entries.next().await {
-            let mut entry = entry?;
-            let entry_path = entry.path()?;
-            let raw = entry_path.to_str().unwrap();
-            let file_name = String::from_utf8_lossy(raw.as_bytes());
-            let file_path = out_dir.join(file_name.as_ref());
-            let entry_is_dir = file_name.ends_with('/');
-            if entry_is_dir {
-                // The directory may have been created if iteration is out of order.
-                if !file_path.exists() {
-                    create_dir_all(&file_path).await?;
-                }
-            } else {
-                let parent = file_path.parent().unwrap();
-                if !parent.is_dir() {
-                    create_dir_all(parent).await?;
-                }
-                match file_path.exists() {
-                    // overwrite the file
-                    true => {
-                        let writer = OpenOptions::new().write(true).open(&file_path).await?;
-                        futures_lite::io::copy(&mut entry, &mut writer.compat_write()).await?;
+        // get length of entries
+        let len = self.get_file_count(path).await;
+
+        let mut count = 0;
+        let (mut writer, reader) = tokio::io::duplex(BUF_SIZE);
+
+        tokio::spawn(async move {
+            while let Some(entry) = entries.next().await {
+                let mut entry = entry.unwrap();
+                let entry_path = entry.path().unwrap();
+                let raw = entry_path.to_str().unwrap();
+                let file_name = String::from_utf8_lossy(raw.as_bytes());
+                let file_path = out_dir.join(file_name.as_ref());
+                let entry_is_dir = file_name.ends_with('/');
+                if entry_is_dir {
+                    // The directory may have been created if iteration is out of order.
+                    if !file_path.exists() {
+                        create_dir_all(&file_path).await.unwrap();
                     }
-                    false => {
-                        let writer = OpenOptions::new().write(true).create_new(true).open(&file_path).await?;
-                        futures_lite::io::copy(&mut entry, &mut writer.compat_write()).await?;
+                } else {
+                    let parent = file_path.parent().unwrap();
+                    if !parent.is_dir() {
+                        create_dir_all(parent).await.unwrap();
+                    }
+                    match file_path.exists() {
+                        // overwrite the file
+                        true => {
+                            let writer = OpenOptions::new().write(true).open(&file_path).await.unwrap();
+                            futures_lite::io::copy(&mut entry, &mut writer.compat_write()).await.unwrap();
+                        }
+                        false => {
+                            let writer = OpenOptions::new().write(true).create_new(true).open(&file_path).await.unwrap();
+                            futures_lite::io::copy(&mut entry, &mut writer.compat_write()).await.unwrap();
+                        }
                     }
                 }
+                count += 1;
+                let progress = format!("data: {}/{}\n\n", count, len);
+                writer.write_all(progress.as_bytes()).await.unwrap();
             }
-        }
+        });
+        let reader_stream = ReaderStream::new(reader);
+        let stream_body = StreamBody::new(
+            reader_stream
+                .map_ok(Frame::data)
+                .map_err(|err| anyhow!("{err}")),
+        );
+        let boxed_body = stream_body.boxed();
+        *res.body_mut() = boxed_body;
         Ok(())
     }
 
