@@ -37,6 +37,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{self, AtomicBool};
 use std::sync::Arc;
+use std::thread::sleep;
 use std::time::SystemTime;
 use tokio::fs::{create_dir_all, File, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWrite, AsyncWriteExt};
@@ -753,45 +754,42 @@ impl Server {
         let length = reader.file().entries().len();
         let mut count = 0;
 
-        if let Err(e) = tokio::spawn(async move {
+        tokio::spawn(async move {
             for index in 0..length {
                 let entry = reader.file().entries().get(index).unwrap();
                 let raw = entry.filename().as_bytes();
                 let file_name = String::from_utf8_lossy(raw);
                 let file_path = out_dir.join(file_name.as_ref());
                 let entry_is_dir = file_name.ends_with('/');
-                let mut entry_reader = reader.reader_without_entry(index).await?;
+                let mut entry_reader = reader.reader_without_entry(index).await.unwrap();
                 if entry_is_dir {
                     // The directory may have been created if iteration is out of order.
                     if !file_path.exists() {
-                        create_dir_all(&file_path).await?;
+                        create_dir_all(&file_path).await.unwrap();
                     }
                 } else {
                     let parent = file_path.parent().unwrap();
                     if !parent.is_dir() {
-                        create_dir_all(parent).await?;
+                        create_dir_all(parent).await.unwrap();
                     }
                     match file_path.exists() {
                         // overwrite the file
                         true => {
-                            let writer = OpenOptions::new().write(true).open(&file_path).await?;
-                            futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
+                            let writer = OpenOptions::new().write(true).open(&file_path).await.unwrap();
+                            futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await.unwrap();
                         }
                         false => {
-                            let writer = OpenOptions::new().write(true).create_new(true).open(&file_path).await?;
-                            futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
+                            let writer = OpenOptions::new().write(true).create_new(true).open(&file_path).await.unwrap();
+                            futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await.unwrap();
                         }
                     }
                 }
                 count += 1;
                 let progress = format!("data: {}/{}\n\n", count, length);
-                sse_writer.write_all(progress.as_bytes()).await?;
+                sse_writer.write_all(progress.as_bytes()).await.unwrap();
             }
-            sse_writer.write_all("data: done\n\n".as_bytes()).await?;
-            Ok::<(), anyhow::Error>(())
-        }).await {
-            error!("Failed to unzip {}, {}", path.display(), e);
-        };
+            sse_writer.write_all("data: done\n\n".as_bytes()).await.unwrap();
+        });
 
         let reader_stream = ReaderStream::new(sse_reader);
         let stream_body = StreamBody::new(
@@ -854,10 +852,10 @@ impl Server {
         let mut count = 0;
         let (mut writer, reader) = tokio::io::duplex(BUF_SIZE);
 
-        if let Err(e) = tokio::spawn(async move {
+        tokio::spawn(async move {
             while let Some(entry) = entries.next().await {
-                let mut entry = entry?;
-                let entry_path = entry.path()?;
+                let mut entry = entry.unwrap();
+                let entry_path = entry.path().unwrap();
                 let raw = entry_path.to_str().unwrap();
                 let file_name = String::from_utf8_lossy(raw.as_bytes());
                 let file_path = out_dir.join(file_name.as_ref());
@@ -865,34 +863,31 @@ impl Server {
                 if entry_is_dir {
                     // The directory may have been created if iteration is out of order.
                     if !file_path.exists() {
-                        create_dir_all(&file_path).await?;
+                        create_dir_all(&file_path).await.unwrap();
                     }
                 } else {
                     let parent = file_path.parent().unwrap();
                     if !parent.is_dir() {
-                        create_dir_all(parent).await?;
+                        create_dir_all(parent).await.unwrap();
                     }
                     match file_path.exists() {
                         // overwrite the file
                         true => {
-                            let writer = OpenOptions::new().write(true).open(&file_path).await?;
-                            futures_lite::io::copy(&mut entry, &mut writer.compat_write()).await?;
+                            let writer = OpenOptions::new().write(true).open(&file_path).await.unwrap();
+                            futures_lite::io::copy(&mut entry, &mut writer.compat_write()).await.unwrap();
                         }
                         false => {
-                            let writer = OpenOptions::new().write(true).create_new(true).open(&file_path).await?;
-                            futures_lite::io::copy(&mut entry, &mut writer.compat_write()).await?;
+                            let writer = OpenOptions::new().write(true).create_new(true).open(&file_path).await.unwrap();
+                            futures_lite::io::copy(&mut entry, &mut writer.compat_write()).await.unwrap();
                         }
                     }
                 }
                 count += 1;
                 let progress = format!("data: {}/{}\n\n", count, len);
-                writer.write_all(progress.as_bytes()).await?;
+                writer.write_all(progress.as_bytes()).await.unwrap();
             }
-            writer.write_all("data: done\n\n".as_bytes()).await?;
-            Ok::<(), anyhow::Error>(())
-        }).await {
-            error!("Failed to untar {}, {}", path.display(), e);
-        };
+            writer.write_all("data: done\n\n".as_bytes()).await.unwrap();
+        });
         let reader_stream = ReaderStream::new(reader);
         let stream_body = StreamBody::new(
             reader_stream
