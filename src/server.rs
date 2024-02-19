@@ -34,7 +34,7 @@ use std::collections::HashMap;
 use std::fs::Metadata;
 use std::io::SeekFrom;
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{self, AtomicBool};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -156,18 +156,23 @@ impl Server {
         let headers = req.headers();
         let method = req.method().clone();
 
-        if method == Method::GET && self.handle_assets(req_path, headers, &mut res).await? {
+        let relative_path = match self.resolve_path(req_path) {
+            Some(v) => v,
+            None => {
+                status_bad_request(&mut res, "Invalid Path");
+                return Ok(res);
+            }
+        };
+
+        if method == Method::GET
+            && self
+                .handle_assets(&relative_path, headers, &mut res)
+                .await?
+        {
             return Ok(res);
         }
 
         let authorization = headers.get(AUTHORIZATION);
-        let relative_path = match self.resolve_path(req_path) {
-            Some(v) => v,
-            None => {
-                status_forbid(&mut res);
-                return Ok(res);
-            }
-        };
 
         let guard = self.args.auth.guard(&relative_path, &method, authorization);
 
@@ -753,42 +758,45 @@ impl Server {
         let length = reader.file().entries().len();
         let mut count = 0;
 
-        tokio::spawn(async move {
+        if let Err(e) = tokio::spawn(async move {
             for index in 0..length {
                 let entry = reader.file().entries().get(index).unwrap();
                 let raw = entry.filename().as_bytes();
                 let file_name = String::from_utf8_lossy(raw);
                 let file_path = out_dir.join(file_name.as_ref());
                 let entry_is_dir = file_name.ends_with('/');
-                let mut entry_reader = reader.reader_without_entry(index).await.unwrap();
+                let mut entry_reader = reader.reader_without_entry(index).await?;
                 if entry_is_dir {
                     // The directory may have been created if iteration is out of order.
                     if !file_path.exists() {
-                        create_dir_all(&file_path).await.unwrap();
+                        create_dir_all(&file_path).await?;
                     }
                 } else {
                     let parent = file_path.parent().unwrap();
                     if !parent.is_dir() {
-                        create_dir_all(parent).await.unwrap();
+                        create_dir_all(parent).await?;
                     }
                     match file_path.exists() {
                         // overwrite the file
                         true => {
-                            let writer = OpenOptions::new().write(true).open(&file_path).await.unwrap();
-                            futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await.unwrap();
+                            let writer = OpenOptions::new().write(true).open(&file_path).await?;
+                            futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
                         }
                         false => {
-                            let writer = OpenOptions::new().write(true).create_new(true).open(&file_path).await.unwrap();
-                            futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await.unwrap();
+                            let writer = OpenOptions::new().write(true).create_new(true).open(&file_path).await?;
+                            futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
                         }
                     }
                 }
                 count += 1;
                 let progress = format!("data: {}/{}\n\n", count, length);
-                sse_writer.write_all(progress.as_bytes()).await.unwrap();
+                sse_writer.write_all(progress.as_bytes()).await?;
             }
-            sse_writer.write_all("data: done\n\n".as_bytes()).await.unwrap();
-        });
+            sse_writer.write_all("data: done\n\n".as_bytes()).await?;
+            Ok::<(), anyhow::Error>(())
+        }).await {
+            error!("Failed to unzip {}, {}", path.display(), e);
+        };
 
         let reader_stream = ReaderStream::new(sse_reader);
         let stream_body = StreamBody::new(
@@ -851,10 +859,10 @@ impl Server {
         let mut count = 0;
         let (mut writer, reader) = tokio::io::duplex(BUF_SIZE);
 
-        tokio::spawn(async move {
+        if let Err(e) = tokio::spawn(async move {
             while let Some(entry) = entries.next().await {
-                let mut entry = entry.unwrap();
-                let entry_path = entry.path().unwrap();
+                let mut entry = entry?;
+                let entry_path = entry.path()?;
                 let raw = entry_path.to_str().unwrap();
                 let file_name = String::from_utf8_lossy(raw.as_bytes());
                 let file_path = out_dir.join(file_name.as_ref());
@@ -862,31 +870,34 @@ impl Server {
                 if entry_is_dir {
                     // The directory may have been created if iteration is out of order.
                     if !file_path.exists() {
-                        create_dir_all(&file_path).await.unwrap();
+                        create_dir_all(&file_path).await?;
                     }
                 } else {
                     let parent = file_path.parent().unwrap();
                     if !parent.is_dir() {
-                        create_dir_all(parent).await.unwrap();
+                        create_dir_all(parent).await?;
                     }
                     match file_path.exists() {
                         // overwrite the file
                         true => {
-                            let writer = OpenOptions::new().write(true).open(&file_path).await.unwrap();
-                            futures_lite::io::copy(&mut entry, &mut writer.compat_write()).await.unwrap();
+                            let writer = OpenOptions::new().write(true).open(&file_path).await?;
+                            futures_lite::io::copy(&mut entry, &mut writer.compat_write()).await?;
                         }
                         false => {
-                            let writer = OpenOptions::new().write(true).create_new(true).open(&file_path).await.unwrap();
-                            futures_lite::io::copy(&mut entry, &mut writer.compat_write()).await.unwrap();
+                            let writer = OpenOptions::new().write(true).create_new(true).open(&file_path).await?;
+                            futures_lite::io::copy(&mut entry, &mut writer.compat_write()).await?;
                         }
                     }
                 }
                 count += 1;
                 let progress = format!("data: {}/{}\n\n", count, len);
-                writer.write_all(progress.as_bytes()).await.unwrap();
+                writer.write_all(progress.as_bytes()).await?;
             }
-            writer.write_all("data: done\n\n".as_bytes()).await.unwrap();
-        });
+            writer.write_all("data: done\n\n".as_bytes()).await?;
+            Ok::<(), anyhow::Error>(())
+        }).await {
+            error!("Failed to untar {}, {}", path.display(), e);
+        };
         let reader_stream = ReaderStream::new(reader);
         let stream_body = StreamBody::new(
             reader_stream
@@ -1001,7 +1012,12 @@ impl Server {
             match self.args.assets.as_ref() {
                 Some(assets_path) => {
                     let path = assets_path.join(name);
-                    self.handle_send_file(&path, headers, false, res, "").await?;
+                    if path.exists() {
+                        self.handle_send_file(&path, headers, false, res, "").await?;
+                    } else {
+                        status_not_found(res);
+                        return Ok(true);
+                    }
                 }
                 None => match name {
                     "index.js" => {
@@ -1452,18 +1468,13 @@ impl Server {
 
     fn extract_dest(&self, req: &Request, res: &mut Response) -> Option<PathBuf> {
         let headers = req.headers();
-        let dest_path = match self.extract_destination_header(headers) {
+        let dest_path = match self
+            .extract_destination_header(headers)
+            .and_then(|dest| self.resolve_path(&dest))
+        {
             Some(dest) => dest,
             None => {
-                *res.status_mut() = StatusCode::BAD_REQUEST;
-                return None;
-            }
-        };
-
-        let relative_path = match self.resolve_path(&dest_path) {
-            Some(v) => v,
-            None => {
-                *res.status_mut() = StatusCode::BAD_REQUEST;
+                status_bad_request(res, "Invalid Destination");
                 return None;
             }
         };
@@ -1472,7 +1483,7 @@ impl Server {
         let guard = self
             .args
             .auth
-            .guard(&relative_path, req.method(), authorization);
+            .guard(&dest_path, req.method(), authorization);
 
         match guard {
             (_, Some(_)) => {}
@@ -1482,7 +1493,7 @@ impl Server {
             }
         };
 
-        let dest = match self.join_path(&relative_path) {
+        let dest = match self.join_path(&dest_path) {
             Some(dest) => dest,
             None => {
                 *res.status_mut() = StatusCode::BAD_REQUEST;
@@ -1500,13 +1511,30 @@ impl Server {
     }
 
     fn resolve_path(&self, path: &str) -> Option<String> {
-        let path = path.trim_matches('/');
         let path = decode_uri(path)?;
-        let prefix = self.args.path_prefix.as_str();
-        if prefix == "/" {
-            return Some(path.to_string());
+        let path = path.trim_matches('/');
+        let mut parts = vec![];
+        for comp in Path::new(path).components() {
+            if let Component::Normal(v) = comp {
+                let v = v.to_string_lossy();
+                if cfg!(windows) {
+                    let chars: Vec<char> = v.chars().collect();
+                    if chars.len() == 2 && chars[1] == ':' && chars[0].is_ascii_alphabetic() {
+                        return None;
+                    }
+                }
+                parts.push(v);
+            } else {
+                return None;
+            }
         }
-        path.strip_prefix(prefix.trim_start_matches('/'))
+        let new_path = parts.join("/");
+        let path_prefix = self.args.path_prefix.as_str();
+        if path_prefix.is_empty() {
+            return Some(new_path);
+        }
+        new_path
+            .strip_prefix(path_prefix.trim_start_matches('/'))
             .map(|v| v.trim_matches('/').to_string())
     }
 
@@ -2045,7 +2073,7 @@ fn parse_upload_offset(headers: &HeaderMap<HeaderValue>, size: u64) -> Result<Op
         Some(v) => v,
         None => return Ok(None),
     };
-    let err = || anyhow!("Invalid X-Update-Range header");
+    let err = || anyhow!("Invalid X-Update-Range Header");
     let value = value.to_str().map_err(|_| err())?;
     if value == "append" {
         return Ok(Some(size));
