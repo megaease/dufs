@@ -811,6 +811,9 @@ impl Server {
         let mut count = 0;
         while let Some(_) = entries.next().await {
             count += 1;
+            if count >= 100000 {
+                break;
+            }
         }
         count
     }
@@ -848,6 +851,9 @@ impl Server {
         let mut entries = reader.entries().unwrap();
         // get length of entries
         let len = self.get_file_count(path).await;
+        if len >= 100000 {
+            return Err(anyhow!("Too many files in the tar file"));
+        }
 
         let mut count = 0;
         let (mut writer, reader) = tokio::io::duplex(BUF_SIZE);
