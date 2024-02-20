@@ -153,7 +153,6 @@ impl Server {
         let mut res = Response::default();
 
         let req_path = req.uri().path();
-        log::info!("{} {}", req.method(), req.uri());
         let headers = req.headers();
         let method = req.method().clone();
 
