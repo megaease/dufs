@@ -643,11 +643,11 @@ async function unzipFile(index) {
     evsrc.onerror = function (e) {
       document.getElementById('loadingIndicator').style.display = 'none';
       mylog("unzipFile error", e)
-      alert(`解压文件失败, ${JSON.stringify(e)}`);
+      alert(`解压文件失败，请检查文件格式或大小`);
       evsrc.close();
     }
   } catch (err) {
-    alert(`解压文件失败, ${err.message}`);
+    alert(`解压文件失败，请检查文件格式或大小`);
     document.getElementById('loadingIndicator').style.display = 'none';
   }
 }
