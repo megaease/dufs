@@ -411,10 +411,8 @@ impl Server {
             Method::DELETE => {
                 if !allow_delete {
                     status_forbid(&mut res);
-                } else if !is_miss {
-                    self.handle_delete(path, is_dir, &mut res).await?
                 } else {
-                    status_not_found(&mut res);
+                    self.handle_delete(path, is_dir, &mut res).await?
                 }
             }
             method => match method.as_str() {
