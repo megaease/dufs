@@ -9,7 +9,10 @@ use crate::utils::{
 use crate::Args;
 
 use anyhow::{anyhow, Result};
-use async_zip::{tokio::write::ZipFileWriter, Compression, ZipDateTime, ZipEntryBuilder, base::read::seek::ZipFileReader};
+use async_zip::{
+    base::read::seek::ZipFileReader, tokio::write::ZipFileWriter, Compression, ZipDateTime,
+    ZipEntryBuilder,
+};
 use bytes::{Buf, Bytes};
 use chrono::{LocalResult, TimeZone, Utc};
 use futures_util::{pin_mut, TryStreamExt};
@@ -42,13 +45,15 @@ use tokio::fs::{create_dir_all, File, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWrite, AsyncWriteExt};
 use tokio::{fs, io};
 
-use tokio_util::compat::{FuturesAsyncWriteCompatExt, TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
+use async_std::prelude::*;
+use async_tar::Archive;
+use tokio_util::compat::{
+    FuturesAsyncWriteCompatExt, TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt,
+};
 use tokio_util::io::{ReaderStream, StreamReader};
 use uuid::Uuid;
 use walkdir::WalkDir;
 use xml::escape::escape_str_pcdata;
-use async_tar::Archive;
-use async_std::prelude::*;
 
 pub type Request = hyper::Request<Incoming>;
 pub type Response = hyper::Response<BoxBody<Bytes, anyhow::Error>>;
@@ -64,7 +69,7 @@ const EDITABLE_TEXT_MAX_SIZE: u64 = 4194304;
 // 4M
 const RESUMABLE_UPLOAD_MIN_SIZE: u64 = 20971520; // 20M
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MultipleDownload {
@@ -194,10 +199,12 @@ impl Server {
 
         if method.as_str() == Method::POST && relative_path.eq("multiple_download") {
             let body = req.collect().await?.to_bytes();
-            let params: MultipleDownload = serde_json::from_value(serde_json::from_reader(body.reader()).unwrap()).unwrap();
+            let params: MultipleDownload =
+                serde_json::from_value(serde_json::from_reader(body.reader()).unwrap()).unwrap();
             let dir_path = params.dir.as_str();
             let file_paths = params.files;
-            self.handle_multiple_download(dir_path, &file_paths, access_paths, &mut res).await?;
+            self.handle_multiple_download(dir_path, &file_paths, access_paths, &mut res)
+                .await?;
             return Ok(res);
         }
 
@@ -226,9 +233,15 @@ impl Server {
 
         let path = path.as_path();
 
-        let (is_miss, is_dir, is_file, size) = match fs::metadata(path).await.ok() {
-            Some(meta) => (false, meta.is_dir(), meta.is_file(), meta.len()),
-            None => (true, false, false, 0),
+        let (is_miss, is_dir, is_file, _, size) = match fs::metadata(path).await.ok() {
+            Some(meta) => (
+                false,
+                meta.is_dir(),
+                meta.is_file(),
+                meta.is_symlink(),
+                meta.len(),
+            ),
+            None => (true, false, false, false, 0),
         };
 
         let allow_upload = self.args.allow_upload;
@@ -264,7 +277,7 @@ impl Server {
                                 access_paths,
                                 &mut res,
                             )
-                                .await?;
+                            .await?;
                         } else {
                             self.handle_render_index(
                                 path,
@@ -275,7 +288,7 @@ impl Server {
                                 access_paths,
                                 &mut res,
                             )
-                                .await?;
+                            .await?;
                         }
                     } else if render_index || render_spa {
                         self.handle_render_index(
@@ -287,7 +300,7 @@ impl Server {
                             access_paths,
                             &mut res,
                         )
-                            .await?;
+                        .await?;
                     } else if query_params.contains_key("zip") {
                         if !allow_archive {
                             status_not_found(&mut res);
@@ -304,7 +317,7 @@ impl Server {
                             access_paths,
                             &mut res,
                         )
-                            .await?;
+                        .await?;
                     } else if query_params.contains_key("statistic") {
                         self.handle_statistic_dir(path, &mut res).await?;
                     } else {
@@ -317,21 +330,28 @@ impl Server {
                             access_paths,
                             &mut res,
                         )
-                            .await?;
+                        .await?;
                     }
                 } else if is_file {
                     if query_params.contains_key("edit") {
                         self.handle_deal_file(path, DataKind::Edit, head_only, user, &mut res)
                             .await?;
                     } else if query_params.contains_key("view") {
-                        self.handle_send_file(path, headers, head_only, &mut res, "").await?;
+                        self.handle_send_file(path, headers, head_only, &mut res, "")
+                            .await?;
                     } else if query_params.contains_key("unzip") {
                         self.handle_unzip_file(path, &mut res).await?;
                     } else if query_params.contains_key("untar") {
                         self.handle_untar_file(path, &mut res).await?;
                     } else {
-                        self.handle_send_file(path, headers, head_only, &mut res, "application/octet-stream")
-                            .await?;
+                        self.handle_send_file(
+                            path,
+                            headers,
+                            head_only,
+                            &mut res,
+                            "application/octet-stream",
+                        )
+                        .await?;
                     }
                 } else if render_spa {
                     self.handle_render_spa(path, headers, head_only, &mut res)
@@ -346,7 +366,7 @@ impl Server {
                         access_paths,
                         &mut res,
                     )
-                        .await?;
+                    .await?;
                 } else {
                     status_not_found(&mut res);
                 }
@@ -581,7 +601,7 @@ impl Server {
             }
             (size, count)
         })
-            .await?;
+        .await?;
         let output = format!(r#"{{"size":{},"count":{}}}"#, size, count);
         res.headers_mut()
             .typed_insert(ContentType::from(mime_guess::mime::APPLICATION_JSON));
@@ -652,7 +672,7 @@ impl Server {
                 }
                 paths
             })
-                .await?;
+            .await?;
             for search_path in search_paths.into_iter() {
                 if let Ok(Some(item)) = self.to_pathitem(search_path, path.to_path_buf()).await {
                     paths.push(item);
@@ -699,7 +719,7 @@ impl Server {
                 compression,
                 running,
             )
-                .await
+            .await
             {
                 error!("Failed to zip {}, {}", path.display(), e);
             }
@@ -731,21 +751,20 @@ impl Server {
             create_dir_all(&out_dir).await?;
         }
 
+        res.headers_mut()
+            .insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
         res.headers_mut().insert(
-            "Access-Control-Allow-Origin", HeaderValue::from_static("*"),
+            "Access-Control-Expose-Headers",
+            HeaderValue::from_static("Content-Type"),
         );
         res.headers_mut().insert(
-            "Access-Control-Expose-Headers", HeaderValue::from_static("Content-Type"),
+            "Content-Type",
+            HeaderValue::from_static("text/event-stream"),
         );
-        res.headers_mut().insert(
-            "Content-Type", HeaderValue::from_static("text/event-stream"),
-        );
-        res.headers_mut().insert(
-            "Cache-Control", HeaderValue::from_static("no-cache"),
-        );
-        res.headers_mut().insert(
-            "Connection", HeaderValue::from_static("keep-alive"),
-        );
+        res.headers_mut()
+            .insert("Cache-Control", HeaderValue::from_static("no-cache"));
+        res.headers_mut()
+            .insert("Connection", HeaderValue::from_static("keep-alive"));
 
         let mut reader = ZipFileReader::new(archive).await?;
 
@@ -774,12 +793,25 @@ impl Server {
                     match file_path.exists() {
                         // overwrite the file
                         true => {
-                            let writer = OpenOptions::new().write(true).open(&file_path).await.unwrap();
-                            futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await.unwrap();
+                            let writer = OpenOptions::new()
+                                .write(true)
+                                .open(&file_path)
+                                .await
+                                .unwrap();
+                            futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write())
+                                .await
+                                .unwrap();
                         }
                         false => {
-                            let writer = OpenOptions::new().write(true).create_new(true).open(&file_path).await.unwrap();
-                            futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await.unwrap();
+                            let writer = OpenOptions::new()
+                                .write(true)
+                                .create_new(true)
+                                .open(&file_path)
+                                .await
+                                .unwrap();
+                            futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write())
+                                .await
+                                .unwrap();
                         }
                     }
                 }
@@ -787,7 +819,10 @@ impl Server {
                 let progress = format!("data: {}/{}\n\n", count, length);
                 sse_writer.write_all(progress.as_bytes()).await.unwrap();
             }
-            sse_writer.write_all("data: done\n\n".as_bytes()).await.unwrap();
+            sse_writer
+                .write_all("data: done\n\n".as_bytes())
+                .await
+                .unwrap();
         });
 
         let reader_stream = ReaderStream::new(sse_reader);
@@ -830,21 +865,20 @@ impl Server {
         if !out_dir.exists() {
             create_dir_all(&out_dir).await?;
         }
+        res.headers_mut()
+            .insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
         res.headers_mut().insert(
-            "Access-Control-Allow-Origin", HeaderValue::from_static("*"),
+            "Access-Control-Expose-Headers",
+            HeaderValue::from_static("Content-Type"),
         );
         res.headers_mut().insert(
-            "Access-Control-Expose-Headers", HeaderValue::from_static("Content-Type"),
+            "Content-Type",
+            HeaderValue::from_static("text/event-stream"),
         );
-        res.headers_mut().insert(
-            "Content-Type", HeaderValue::from_static("text/event-stream"),
-        );
-        res.headers_mut().insert(
-            "Cache-Control", HeaderValue::from_static("no-cache"),
-        );
-        res.headers_mut().insert(
-            "Connection", HeaderValue::from_static("keep-alive"),
-        );
+        res.headers_mut()
+            .insert("Cache-Control", HeaderValue::from_static("no-cache"));
+        res.headers_mut()
+            .insert("Connection", HeaderValue::from_static("keep-alive"));
 
         let reader = Archive::new(archive);
         let mut entries = reader.entries().unwrap();
@@ -878,12 +912,25 @@ impl Server {
                     match file_path.exists() {
                         // overwrite the file
                         true => {
-                            let writer = OpenOptions::new().write(true).open(&file_path).await.unwrap();
-                            futures_lite::io::copy(&mut entry, &mut writer.compat_write()).await.unwrap();
+                            let writer = OpenOptions::new()
+                                .write(true)
+                                .open(&file_path)
+                                .await
+                                .unwrap();
+                            futures_lite::io::copy(&mut entry, &mut writer.compat_write())
+                                .await
+                                .unwrap();
                         }
                         false => {
-                            let writer = OpenOptions::new().write(true).create_new(true).open(&file_path).await.unwrap();
-                            futures_lite::io::copy(&mut entry, &mut writer.compat_write()).await.unwrap();
+                            let writer = OpenOptions::new()
+                                .write(true)
+                                .create_new(true)
+                                .open(&file_path)
+                                .await
+                                .unwrap();
+                            futures_lite::io::copy(&mut entry, &mut writer.compat_write())
+                                .await
+                                .unwrap();
                         }
                     }
                 }
@@ -936,7 +983,7 @@ impl Server {
                 access_paths,
                 running,
             )
-                .await
+            .await
             {
                 error!("Failed to zip {}, {}", base_path.display(), e);
             }
@@ -1007,7 +1054,8 @@ impl Server {
             match self.args.assets.as_ref() {
                 Some(assets_path) => {
                     let path = assets_path.join(name);
-                    self.handle_send_file(&path, headers, false, res, "").await?;
+                    self.handle_send_file(&path, headers, false, res, "")
+                        .await?;
                 }
                 None => match name {
                     "index.js" => {
@@ -1110,10 +1158,8 @@ impl Server {
             "" => get_content_type(path).await?,
             _ => content_type.to_string(),
         };
-        res.headers_mut().insert(
-            CONTENT_TYPE,
-            HeaderValue::from_str(content_type.as_str())?,
-        );
+        res.headers_mut()
+            .insert(CONTENT_TYPE, HeaderValue::from_str(content_type.as_str())?);
 
         let filename = try_get_file_name(path)?;
         set_content_disposition(res, true, filename)?;
@@ -1562,8 +1608,8 @@ impl Server {
 
     async fn to_pathitem<P: AsRef<Path>>(&self, path: P, base_path: P) -> Result<Option<PathItem>> {
         let path = path.as_ref();
-        let (meta, ) = tokio::join!(fs::symlink_metadata(&path));
-        let (meta, ) = (meta?, );
+        let (meta,) = tokio::join!(fs::symlink_metadata(&path));
+        let (meta,) = (meta?,);
         let is_symlink = meta.is_symlink();
         if !self.args.allow_symlink && is_symlink && !self.is_root_contained(path).await {
             return Ok(None);
@@ -1856,7 +1902,7 @@ async fn zip_dir<W: AsyncWrite + Unpin>(
         }
         paths
     })
-        .await?;
+    .await?;
     for zip_path in zip_paths.into_iter() {
         let filename = match zip_path.strip_prefix(dir).ok().and_then(|v| v.to_str()) {
             Some(v) => v,
@@ -1918,10 +1964,15 @@ async fn zip_dir_or_file<W: AsyncWrite + Unpin>(
         }
 
         paths
-    }).await?;
+    })
+    .await?;
 
     for zip_path in zip_paths.into_iter() {
-        let filename = match zip_path.strip_prefix(base_path).ok().and_then(|v| v.to_str()) {
+        let filename = match zip_path
+            .strip_prefix(base_path)
+            .ok()
+            .and_then(|v| v.to_str())
+        {
             Some(v) => v,
             None => continue,
         };
@@ -1981,7 +2032,7 @@ fn set_content_disposition(res: &mut Response, inline: bool, filename: &str) -> 
         })
         .collect();
     let value = if filename.is_ascii() {
-        HeaderValue::from_str(&format!("{kind}; filename=\"{}\"", filename, ))?
+        HeaderValue::from_str(&format!("{kind}; filename=\"{}\"", filename,))?
     } else {
         HeaderValue::from_str(&format!(
             "{kind}; filename=\"{}\"; filename*=UTF-8''{}",
