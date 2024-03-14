@@ -1,13 +1,14 @@
-use anyhow::{bail, Context, Result};
-use async_zip::Compression;
-use clap::builder::{PossibleValue, PossibleValuesParser};
-use clap::{value_parser, Arg, ArgAction, ArgMatches, Command, ValueEnum};
-use clap_complete::{generate, Generator, Shell};
-use serde::{Deserialize, Deserializer};
-use smart_default::SmartDefault;
 use std::env;
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
+
+use anyhow::{bail, Context, Result};
+use async_zip::Compression;
+use clap::{Arg, ArgAction, ArgMatches, Command, value_parser, ValueEnum};
+use clap::builder::{PossibleValue, PossibleValuesParser};
+use clap_complete::{generate, Generator, Shell};
+use serde::{Deserialize, Deserializer};
+use smart_default::SmartDefault;
 
 use crate::auth::AccessControl;
 use crate::http_logger::HttpLogger;
@@ -212,6 +213,13 @@ pub fn build_cli() -> Command {
                 .value_name("shell")
                 .value_parser(value_parser!(Shell))
                 .help("Print shell completion script for <shell>"),
+        )
+        .arg(
+            Arg::new("mega-storage")
+                .long("mega-storage")
+                .value_name("Storage id-names")
+                .value_parser(value_parser!(String))
+                .help("Set mega storage"),
         );
 
     #[cfg(feature = "tls")]
@@ -283,6 +291,7 @@ pub struct Args {
     pub compress: Compress,
     pub tls_cert: Option<PathBuf>,
     pub tls_key: Option<PathBuf>,
+    pub mega_storage: String,
 }
 
 impl Args {
@@ -292,6 +301,10 @@ impl Args {
     /// error message to user.
     pub fn parse(matches: ArgMatches) -> Result<Args> {
         let mut args = Self::default();
+
+        if let Some(mega_storage) = matches.get_one::<String>("mega-storage") {
+            args.mega_storage = mega_storage.clone();
+        }
 
         if let Some(config_path) = matches.get_one::<PathBuf>("config") {
             let contents = std::fs::read_to_string(config_path)
@@ -611,9 +624,9 @@ fn default_port() -> u16 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use assert_fs::prelude::*;
+
+    use super::*;
 
     #[test]
     fn test_default() {

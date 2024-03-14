@@ -67,7 +67,8 @@ const INDEX_NAME: &str = "index.html";
 const BUF_SIZE: usize = 65536;
 const EDITABLE_TEXT_MAX_SIZE: u64 = 4194304;
 // 4M
-const RESUMABLE_UPLOAD_MIN_SIZE: u64 = 20971520; // 20M
+const RESUMABLE_UPLOAD_MIN_SIZE: u64 = 20971520;
+const MEGA_STORAGE_HEADER: &str = "x-mega-storage";// 20M
 
 use serde::{Deserialize, Serialize};
 
@@ -160,6 +161,11 @@ impl Server {
         let req_path = req.uri().path();
         let headers = req.headers();
         let method = req.method().clone();
+
+        if headers.contains_key(MEGA_STORAGE_HEADER) {
+            *res.body_mut() = body_full(self.args.mega_storage.clone());
+            return Ok(res);
+        }
 
         if method == Method::GET && self.handle_assets(req_path, headers, &mut res).await? {
             return Ok(res);
