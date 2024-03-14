@@ -98,8 +98,8 @@ let $userBtn;
  */
 let $userName;
 
-let mylog = console.log;
-// let mylog = () => { };
+// let mylog = console.log;
+let mylog = () => { };
 
 function ready() {
   $pathsTable = document.querySelector(".paths-table")
