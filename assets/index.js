@@ -591,21 +591,21 @@ function addPath(file, index) {
   </td>
   <td class="path cell-name nonselect" 
     onclick="clickPathChangeCheckBox(event, ${index})" 
-    ondblclick="dblclickPathOpenURL(event, '${index}', '${url}', ${isDir})"
+    ondblclick="dblclickPathOpenURL(event, '${index}')"
     oncontextmenu="openContextMenu(event, ${index})" 
   >
   ${isDir ? `<a style="text-decoration: none;">${encodedName}</a>` : encodedName}
   </td>
   <td class="cell-mtime nonselect" 
     onclick="clickPathChangeCheckBox(event, ${index})"
-    ondblclick="dblclickPathOpenURL(event, '${index}', '${url}', ${isDir})"
+    ondblclick="dblclickPathOpenURL(event, '${index}')"
     oncontextmenu="openContextMenu(event, ${index})" 
   >
     ${formatMtime(file.mtime)}
   </td>
   <td class="cell-size nonselect" 
     onclick="clickPathChangeCheckBox(event, ${index})"
-    ondblclick="dblclickPathOpenURL(event, '${index}', '${url}', ${isDir})"
+    ondblclick="dblclickPathOpenURL(event, '${index}')"
     oncontextmenu="openContextMenu(event, ${index})" 
   >
     ${isDir ? "- B" : formatSize(file.size).join(" ")}
@@ -662,15 +662,6 @@ async function unzipFile(index) {
   }
 }
 
-function openURL(url, newTab = false) {
-  cleanContextMenu();
-  if (newTab) {
-    window.open(url);
-  } else {
-    window.location.href = url;
-  }
-}
-
 function openContextMenu(e, index) {
   e.preventDefault()
   mylog("openContextMenu", index)
@@ -679,7 +670,7 @@ function openContextMenu(e, index) {
   let url = newUrl(file.name)
   let isDir = file.path_type.endsWith("Dir");
 
-  let actionOpen = `<li class="contextMenuItem" onclick="openURL('${isDir ? url : url + "?view"}', ${isDir ? false : true})">打开</li>`;
+  let actionOpen = `<li class="contextMenuItem" onclick="openURL(${index})">打开</li>`;
   let actionDelete = "";
   let actionDownload = "";
   let actionRename = "";
@@ -695,11 +686,11 @@ function openContextMenu(e, index) {
     url += "/";
     if (DATA.allow_archive) {
       actionDownload = `
-      <li class="contextMenuItem" onclick="openURL('${url}?zip')">打包并下载</li>`;
+      <li class="contextMenuItem" onclick="zipDownloadDir(${index})">打包并下载</li>`;
     }
   } else {
     actionDownload = `
-    <li class="contextMenuItem" onclick="openURL('${url}')">下载</li>`;
+    <li class="contextMenuItem" onclick="downloadFile(${index})">下载</li>`;
   }
   if (DATA.allow_delete) {
     if (DATA.allow_upload) {
@@ -707,7 +698,7 @@ function openContextMenu(e, index) {
       actionMove = `<li class="contextMenuItem" onclick="movePathByFileTree(${index})" id="moveBtn${index}" title="移动">移动</li>`;
       actionCopyToOtherStorage = `<li class="contextMenuItem" onclick="copyToOtherStorage(${index})" id="copyToOtherBtn${index}" title="拷贝到其他存储">拷贝到其他存储</li>`;
       if (!isDir) {
-        actionEdit = `<li class="contextMenuItem" onclick="openURL('${url}?edit', true)">编辑</li>`;
+        actionEdit = `<li class="contextMenuItem" onclick="editFile(${index})">编辑</li>`;
         actionCopyFile = `<li class="contextMenuItem" onclick="copyFile(${index})" id="copyFileBtn${index}" title="拷贝">拷贝</li>`;
       }
     }
@@ -720,7 +711,7 @@ function openContextMenu(e, index) {
     actionUnzip = `<li class="contextMenuItem" onclick="unzipFile(${index})" id="unzipBtn${index}" title="解压缩">解压 zip/tar 文件</li>`;
   }
   if (!actionEdit && !isDir) {
-    actionView = `<li class="contextMenuItem" onclick="openURL('${url}?view', true)">查看</li>`;
+    actionView = `<li class="contextMenuItem" onclick="viewFile(${index})">查看</li>`;
   }
   let actions = `
   <ul>
@@ -756,6 +747,47 @@ function openContextMenu(e, index) {
   menus.classList.remove('hidden');
 }
 
+function openURL(index) {
+  const file = DATA.paths[index];
+  let url = newUrl(file.name)
+  let isDir = file.path_type.endsWith("Dir");
+  doOpenURL(isDir ? url : url + "?view", isDir ? false : true);
+}
+
+function zipDownloadDir(index) {
+  const file = DATA.paths[index];
+  let url = newUrl(file.name) + "/?zip";
+  doOpenURL(url);
+}
+
+function downloadFile(index) {
+  const file = DATA.paths[index];
+  let url = newUrl(file.name);
+  doOpenURL(url);
+}
+
+function editFile(index) {
+  const file = DATA.paths[index];
+  let url = newUrl(file.name);
+  doOpenURL(url + "?edit", true);
+}
+
+function viewFile(index) {
+  const file = DATA.paths[index];
+  let url = newUrl(file.name);
+  doOpenURL(url + "?view", true);
+}
+
+
+function doOpenURL(url, newTab = false) {
+  cleanContextMenu();
+  if (newTab) {
+    window.open(url);
+  } else {
+    window.location.href = url;
+  }
+}
+
 // key is index, value is timer
 const checkBoxTimer = {};
 
@@ -764,7 +796,10 @@ const checkBoxTimer = {};
  * @param {click event} event 
  * @param {index, url, idDir} openURLObj 
  */
-function dblclickPathOpenURL(event, index, url, isDir) {
+function dblclickPathOpenURL(event, index) {
+  const file = DATA.paths[index];
+  const url = newUrl(file.name);
+  let isDir = file.path_type.endsWith("Dir");
   const timer = checkBoxTimer[index]
   if (timer) {
     clearTimeout(timer);
