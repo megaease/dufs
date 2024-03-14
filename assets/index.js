@@ -382,6 +382,12 @@ function initBatchOperationButtons() {
   downloadButton.textContent = '批量下载';
   downloadButton.addEventListener('click', downloadSelectedItems);
   batchBtns.appendChild(downloadButton);
+
+  const copyToOtherStorageButton = document.createElement('button');
+  copyToOtherStorageButton.classList.add("toolbox-btn")
+  copyToOtherStorageButton.textContent = '批量拷贝到其他存储';
+  copyToOtherStorageButton.addEventListener('click', copyToOtherStorageSelectedItems);
+  batchBtns.appendChild(copyToOtherStorageButton);
 }
 
 /**
@@ -437,6 +443,10 @@ function deleteSelectedItems() {
 
 function downloadSelectedItems() {
   downloadBatchPaths(selectedItems);
+}
+
+function copyToOtherStorageSelectedItems() {
+  copyToOtherStorageBatchPaths(selectedItems);
 }
 
 function moveSelectedItems() {
@@ -1191,6 +1201,49 @@ async function renamePath(index) {
   }
 }
 
+async function copyToOtherStorageBatchPaths(items) {
+  selectedPath = notChoosePath
+  cleanContextMenu();
+  const buttons = {
+    "确认": async function () {
+      if (selectedPath === notChoosePath) {
+        alert("请选择目标路径");
+        return;
+      }
+      $(this).dialog("close");
+      for (const index of items) {
+        await doCopyToOtherStorageByFileTree(index)
+      }
+      cleanCheckBoxAndSelectedItems();
+      alert("拷贝成功")
+    },
+    "取消": function () {
+      mylog("dialog 取消");
+      $(this).dialog("close");
+    }
+  }
+  $('#treeDialog').dialog('option', 'buttons', buttons)
+  $('#treeDialog').dialog('open')
+  const data = await listPath(getOtherStoragePathPrefix());
+  mylog("data", data)
+  let nodes = pathDataToNodes(data, true)
+  const idToName = await storageIDToName()
+  storageIDToNameMap = idToName
+  mylog("nodes", nodes)
+  nodes = nodes.map(node => {
+    if (idToName[node.name]) {
+      node.name = idToName[node.name]
+    }
+    return node
+  }).filter(node => {
+    if (node.id === getDefaultPathPrefix() || node.id.startsWith(getDefaultPathPrefix() + "/")) {
+      return false
+    }
+    return true
+  })
+  $('#tree').tree("loadData", nodes);
+}
+
 async function copyToOtherStorage(index) {
   selectedPath = notChoosePath
   cleanContextMenu();
@@ -1203,6 +1256,7 @@ async function copyToOtherStorage(index) {
       mylog("dialog 确认", index, selectedPath);
       $(this).dialog("close");
       await doCopyToOtherStorageByFileTree(index)
+      alert("拷贝成功")
     },
     "取消": function () {
       mylog("dialog 取消");
@@ -1256,7 +1310,7 @@ async function doCopyToOtherStorageByFileTree(index) {
       method: "HEAD",
     });
     if (res1.status === 200) {
-      if (!confirm("是否覆盖？")) {
+      if (!confirm(`是否覆盖${file.name}？`)) {
         return;
       }
     }
@@ -1267,7 +1321,7 @@ async function doCopyToOtherStorageByFileTree(index) {
       }
     });
     await assertResOK(res2);
-    alert("拷贝成功")
+    return
   } catch (err) {
     alert(`无法拷贝 \`${file.name}\` 到 \`${path}\`, ${err.message}`);
   }
