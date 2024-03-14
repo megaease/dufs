@@ -98,8 +98,8 @@ let $userBtn;
  */
 let $userName;
 
-// let mylog = console.log;
-let mylog = () => { };
+let mylog = console.log;
+// let mylog = () => { };
 
 function ready() {
   $pathsTable = document.querySelector(".paths-table")
@@ -680,6 +680,7 @@ function openContextMenu(e, index) {
   let actionDirSize = "";
   let actionUnzip = "";
   let actionCopyPath = `<li class="contextMenuItem" onclick="copyPath(${index})" title="复制路径" target="_blank">复制路径</li>`
+  let actionCopyToOtherStorage = "";
   if (isDir) {
     url += "/";
     if (DATA.allow_archive) {
@@ -694,6 +695,7 @@ function openContextMenu(e, index) {
     if (DATA.allow_upload) {
       actionRename = `<li class="contextMenuItem" onclick="renamePath(${index})" id="renameBtn${index}" title="重命名">重命名</li>`;
       actionMove = `<li class="contextMenuItem" onclick="movePathByFileTree(${index})" id="moveBtn${index}" title="移动">移动</li>`;
+      actionCopyToOtherStorage = `<li class="contextMenuItem" onclick="copyToOtherStorage(${index})" id="copyToOtherBtn${index}" title="拷贝到其他存储">拷贝到其他存储</li>`;
       if (!isDir) {
         actionEdit = `<li class="contextMenuItem" onclick="openURL('${url}?edit', true)">编辑</li>`;
         actionCopyFile = `<li class="contextMenuItem" onclick="copyFile(${index})" id="copyFileBtn${index}" title="拷贝">拷贝</li>`;
@@ -719,6 +721,7 @@ function openContextMenu(e, index) {
     ${actionView}
     ${actionRename}
     ${actionMove}
+    ${actionCopyToOtherStorage} 
     ${actionDelete}
     ${actionEdit}
     ${actionCopyFile}
@@ -1162,6 +1165,22 @@ async function listPath(path) {
   }
 }
 
+async function storageIDToName() {
+  let url = baseUrl()
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "X-Mega-Storage": "true",
+      }
+    })
+    await assertResOK(res);
+    return await res.json();
+  } catch {
+    alert(`无法获取存储名称`);
+    return {};
+  }
+}
+
 async function renamePath(index) {
   cleanContextMenu();
   const file = DATA.paths[index];
@@ -1172,7 +1191,90 @@ async function renamePath(index) {
   }
 }
 
+async function copyToOtherStorage(index) {
+  selectedPath = notChoosePath
+  cleanContextMenu();
+  const buttons = {
+    "确认": async function () {
+      if (selectedPath === notChoosePath) {
+        alert("请选择目标路径");
+        return;
+      }
+      mylog("dialog 确认", index, selectedPath);
+      $(this).dialog("close");
+      await doCopyToOtherStorageByFileTree(index)
+    },
+    "取消": function () {
+      mylog("dialog 取消");
+      $(this).dialog("close");
+    }
+  }
+  $('#treeDialog').dialog('option', 'buttons', buttons)
+  $('#treeDialog').dialog('open')
+  const data = await listPath(getOtherStoragePathPrefix());
+  mylog("data", data)
+  let nodes = pathDataToNodes(data, true)
+  const idToName = await storageIDToName()
+  storageIDToNameMap = idToName
+  mylog("nodes", nodes)
+  nodes = nodes.map(node => {
+    if (idToName[node.name]) {
+      node.name = idToName[node.name]
+    }
+    return node
+  }).filter(node => {
+    if (node.id === getDefaultPathPrefix() || node.id.startsWith(getDefaultPathPrefix() + "/")) {
+      return false
+    }
+    return true
+  })
+  $('#tree').tree("loadData", nodes);
+}
+
+async function doCopyToOtherStorageByFileTree(index) {
+  const file = DATA.paths[index];
+  const url = newUrl(file.name)
+  let newFileUrl = baseUrl().replace(getEncodingHref(), "")
+  if (newFileUrl.endsWith("/")) {
+    newFileUrl = newFileUrl.slice(0, -1)
+  }
+  let path = selectedPath
+  if (!path.startsWith("/")) {
+    path = `/${path}`
+  }
+
+  newFileUrl = `${newFileUrl}${path.split("/").map(encodeURIComponent).join("/")}`
+  if (newFileUrl.endsWith("/")) {
+    newFileUrl += encodeURIComponent(file.name)
+  } else {
+    newFileUrl += `/${encodeURIComponent(file.name)}`
+  }
+  mylog("fileurl", url, "new file url", newFileUrl)
+  try {
+    await checkAuth();
+    const res1 = await fetch(newFileUrl, {
+      method: "HEAD",
+    });
+    if (res1.status === 200) {
+      if (!confirm("是否覆盖？")) {
+        return;
+      }
+    }
+    const res2 = await fetch(url, {
+      method: "COPY",
+      headers: {
+        "Destination": newFileUrl,
+      }
+    });
+    await assertResOK(res2);
+    alert("拷贝成功")
+  } catch (err) {
+    alert(`无法拷贝 \`${file.name}\` 到 \`${path}\`, ${err.message}`);
+  }
+}
+
 function movePathByFileTree(index) {
+  selectedPath = notChoosePath
   cleanContextMenu();
   const buttons = {
     "确认": async function () {
@@ -1210,6 +1312,10 @@ function getDefaultPathPrefix() {
   } else {
     return '';
   }
+}
+
+function getOtherStoragePathPrefix() {
+  return "/"
 }
 
 async function copyFile(index) {
@@ -1635,6 +1741,23 @@ const treeNoChildren = "没有子目录";
 const notChoosePath = "没有选择路径";
 
 let selectedPath = ""
+let storageIDToNameMap = {}
+
+function getCurrentPath() {
+  if (selectedPath === getDefaultPathPrefix() || selectedPath.startsWith(getDefaultPathPrefix() + "/")) {
+    return selectedPath.replace(getDefaultPathPrefix(), "根目录")
+  }
+  let paths = selectedPath.split("/").filter(v => v.length > 0)
+  if (paths.length === 0) {
+    return selectedPath
+  }
+  const id = paths[0]
+  if (storageIDToNameMap[id]) {
+    paths[0] = storageIDToNameMap[id]
+  }
+  return paths.join("/")
+}
+
 function initFileTree() {
   $('#treeDialog').dialog({
     autoOpen: false,
@@ -1664,8 +1787,8 @@ function initFileTree() {
     const node = e.node;
     mylog("tree open node", node);
     selectedPath = node.id || notChoosePath;
-    const currentPath = selectedPath.replace(getDefaultPathPrefix(), "")
-    document.getElementById("selectedPath").textContent = `已选择路径：${currentPath === "" ? "根目录" : currentPath}`
+    const currentPath = getCurrentPath()
+    document.getElementById("selectedPath").textContent = `已选择路径：${currentPath}`
     if (node.children && node.children.length > 0 && !hasLoadingChildren(node)) {
       return;
     }
@@ -1697,7 +1820,7 @@ function initFileTree() {
   $("#tree").bind("tree.click", function (event) {
     const node = event.node;
     selectedPath = node.id || notChoosePath;
-    document.getElementById("selectedPath").textContent = `已选择路径：${selectedPath.replace(getDefaultPathPrefix(), "")}`
+    document.getElementById("selectedPath").textContent = `已选择路径：${getCurrentPath()}`
     if (node.is_open) {
       $('#tree').tree('closeNode', node);
     } else {
