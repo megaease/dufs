@@ -38,6 +38,7 @@ use std::fs::Metadata;
 use std::io::SeekFrom;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::atomic::{self, AtomicBool};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -283,7 +284,7 @@ impl Server {
                                 access_paths,
                                 &mut res,
                             )
-                            .await?;
+                                .await?;
                         } else {
                             self.handle_render_index(
                                 path,
@@ -294,7 +295,7 @@ impl Server {
                                 access_paths,
                                 &mut res,
                             )
-                            .await?;
+                                .await?;
                         }
                     } else if render_index || render_spa {
                         self.handle_render_index(
@@ -306,7 +307,7 @@ impl Server {
                             access_paths,
                             &mut res,
                         )
-                        .await?;
+                            .await?;
                     } else if query_params.contains_key("zip") {
                         if !allow_archive {
                             status_not_found(&mut res);
@@ -323,7 +324,7 @@ impl Server {
                             access_paths,
                             &mut res,
                         )
-                        .await?;
+                            .await?;
                     } else if query_params.contains_key("statistic") {
                         self.handle_statistic_dir(path, &mut res).await?;
                     } else {
@@ -336,7 +337,7 @@ impl Server {
                             access_paths,
                             &mut res,
                         )
-                        .await?;
+                            .await?;
                     }
                 } else if is_file {
                     if query_params.contains_key("edit") {
@@ -357,7 +358,7 @@ impl Server {
                             &mut res,
                             "application/octet-stream",
                         )
-                        .await?;
+                            .await?;
                     }
                 } else if render_spa {
                     self.handle_render_spa(path, headers, head_only, &mut res)
@@ -372,7 +373,7 @@ impl Server {
                         access_paths,
                         &mut res,
                     )
-                    .await?;
+                        .await?;
                 } else {
                     status_not_found(&mut res);
                 }
@@ -605,7 +606,7 @@ impl Server {
             }
             (size, count)
         })
-        .await?;
+            .await?;
         let output = format!(r#"{{"size":{},"count":{}}}"#, size, count);
         res.headers_mut()
             .typed_insert(ContentType::from(mime_guess::mime::APPLICATION_JSON));
@@ -676,7 +677,7 @@ impl Server {
                 }
                 paths
             })
-            .await?;
+                .await?;
             for search_path in search_paths.into_iter() {
                 if let Ok(Some(item)) = self.to_pathitem(search_path, path.to_path_buf()).await {
                     paths.push(item);
@@ -723,7 +724,7 @@ impl Server {
                 compression,
                 running,
             )
-            .await
+                .await
             {
                 error!("Failed to zip {}, {}", path.display(), e);
             }
@@ -987,7 +988,7 @@ impl Server {
                 access_paths,
                 running,
             )
-            .await
+                .await
             {
                 error!("Failed to zip {}, {}", base_path.display(), e);
             }
@@ -1327,7 +1328,13 @@ impl Server {
 
         let meta = fs::symlink_metadata(path).await?;
         if meta.is_dir() {
-            status_forbid(res);
+            Command::new("cp")
+                .arg("-r")
+                .arg(path)
+                .arg(dest)
+                .output()?;
+            // status_forbid(res);
+            status_no_content(res);
             return Ok(());
         }
 
@@ -1612,8 +1619,8 @@ impl Server {
 
     async fn to_pathitem<P: AsRef<Path>>(&self, path: P, base_path: P) -> Result<Option<PathItem>> {
         let path = path.as_ref();
-        let (meta,) = tokio::join!(fs::symlink_metadata(&path));
-        let (meta,) = (meta?,);
+        let (meta, ) = tokio::join!(fs::symlink_metadata(&path));
+        let (meta, ) = (meta?, );
         let is_symlink = meta.is_symlink();
         if !self.args.allow_symlink && is_symlink && !self.is_root_contained(path).await {
             return Ok(None);
@@ -1906,7 +1913,7 @@ async fn zip_dir<W: AsyncWrite + Unpin>(
         }
         paths
     })
-    .await?;
+        .await?;
     for zip_path in zip_paths.into_iter() {
         let filename = match zip_path.strip_prefix(dir).ok().and_then(|v| v.to_str()) {
             Some(v) => v,
@@ -1969,7 +1976,7 @@ async fn zip_dir_or_file<W: AsyncWrite + Unpin>(
 
         paths
     })
-    .await?;
+        .await?;
 
     for zip_path in zip_paths.into_iter() {
         let filename = match zip_path
@@ -2036,7 +2043,7 @@ fn set_content_disposition(res: &mut Response, inline: bool, filename: &str) -> 
         })
         .collect();
     let value = if filename.is_ascii() {
-        HeaderValue::from_str(&format!("{kind}; filename=\"{}\"", filename,))?
+        HeaderValue::from_str(&format!("{kind}; filename=\"{}\"", filename, ))?
     } else {
         HeaderValue::from_str(&format!(
             "{kind}; filename=\"{}\"; filename*=UTF-8''{}",
