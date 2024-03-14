@@ -1328,6 +1328,7 @@ impl Server {
 
         let meta = fs::symlink_metadata(path).await?;
         if meta.is_dir() {
+            log::info!("copy dir: {} -> {}", path.display(), dest.display());
             Command::new("cp")
                 .arg("-r")
                 .arg(path)
