@@ -1349,6 +1349,8 @@ async function doCopyToOtherStorageByFileTree(index) {
         return;
       }
     }
+    document.getElementById('loadingIndicator').style.display = 'flex';
+    document.querySelector(".loading-text").textContent = `正在拷贝${file.name}中，请勿刷新`
     const res2 = await fetch(url, {
       method: "COPY",
       headers: {
@@ -1356,8 +1358,10 @@ async function doCopyToOtherStorageByFileTree(index) {
       }
     });
     await assertResOK(res2);
+    document.getElementById('loadingIndicator').style.display = 'none';
     return
   } catch (err) {
+    document.getElementById('loadingIndicator').style.display = 'none';
     alert(`无法拷贝 \`${file.name}\` 到 \`${path}\`, ${err.message}`);
   }
 }
